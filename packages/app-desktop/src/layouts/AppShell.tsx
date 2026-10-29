@@ -42,9 +42,10 @@ import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { UpdateDialog } from "../components/UpdateDialog";
+import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffectiveProfile";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
-import { getProfile, listPendingMatches, quitApp } from "../lib/tauri";
+import { listPendingMatches, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 
@@ -153,11 +154,10 @@ export function AppShell() {
   });
   const pendingCount = pending.data?.length ?? 0;
 
-  const profile = useQuery({
-    queryKey: ["profile"],
-    queryFn: getProfile,
-    retry: false,
-  });
+  // Conectado ao Alvanista, o nome e o avatar de lá (o perfil local fica
+  // guardado e volta ao desconectar).
+  const profile = useEffectiveProfile();
+  useAlvanistaStatusEvents();
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
   // Rolagem por wheel é NATIVA (o WebKitGTK já entrega inércia/suavidade
@@ -211,9 +211,7 @@ export function AppShell() {
               aria-label={t("shell.profile")}
             >
               <ProfileAvatar
-                profile={
-                  profile.data ?? { name: "Jogador", avatar: "preset:1" }
-                }
+                profile={profile ?? { name: "Jogador", avatar: "preset:1" }}
                 size={32}
                 className={s.railAvatarSize}
                 ring={SHOW_AVATAR_RING}

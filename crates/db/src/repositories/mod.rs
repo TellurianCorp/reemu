@@ -4,6 +4,7 @@
 //! `domain::error::RepoError`. Nenhum tipo do sqlx aparece na assinatura
 //! pública.
 
+mod alvanista_repo;
 mod audio_config_repo;
 mod controller_mappings_repo;
 mod core_options_repo;
@@ -21,6 +22,7 @@ mod system_core_repo;
 mod system_hotkeys_repo;
 mod video_config_repo;
 
+pub use alvanista_repo::AlvanistaRepo;
 pub use audio_config_repo::AudioConfigRepo;
 pub use controller_mappings_repo::ControllerMappingsRepo;
 pub use core_options_repo::CoreOptionsRepo;
