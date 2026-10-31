@@ -3229,3 +3229,26 @@ Infra:
   - banco da v0.1.10 migra sem perder dados (`crates/db/tests/alvanista_migration.rs`: todas as linhas de todas as tabelas iguais antes e depois; bancos de pré-lançamento na 0017 e na 0018 abrem e ficam com a sessão);
   - sem rede, o app abre com o perfil certo (`offline_the_app_opens_with_the_right_profile`: sem sessão, nada do Alvanista; conectado, o último perfil guardado inteiro, como offline);
   - desconectar devolve o perfil local exatamente como estava (`disconnect_gives_back_the_local_profile_exactly_as_it_was`, comparando a linha do `profile` antes de conectar e depois de desconectar).
+
+## 2026-10-31 — Meu perfil completo
+
+- **Pedido:** a segunda peça do "Entrar com Alvanista". A primeira só espelhava nome, avatar, bio e capa em drawers e em Configurações › Perfil; agora há uma página própria, em tela cheia, em `/perfil`. O item "Meu perfil" do `ProfileDrawer` abre essa página, e Configurações › Perfil continua sendo o lugar de editar o perfil local e de conectar.
+- **Dependência do servidor:** o `/me` da API de parceiros do Alvanista passou a devolver `card` (nível, plano, título do Reino, localização, ano de membro, números da conta, selos, jogo atual, posição da capa e paleta). Está em produção desde 2026-10-31 (release 2.171.0). Um servidor mais antigo, sem `card`, só esconde os blocos do Alvanista: o resto da página funciona igual.
+- **O que a pessoa vê:**
+  - **Topo:** capa posicionada pelo card, avatar, nome, bio e chips (nível, plano tingido pela paleta com tinta legível, título do Reino, Alvanista). Desconectado, o perfil local com as cores do tema e "Editar perfil";
+  - **No ReEmu:** jogos, tempo de jogo, sistemas e favoritos;
+  - **Jogados recentemente:** capas com o tempo de jogo e a data relativa embaixo; **Mais jogados no ReEmu**: ordenados pelo tempo;
+  - **No Alvanista** (some sem card): coleção, troféus por rede, horas, zerados, check-ins, gamers, até quatro selos com o total e "jogando agora";
+  - **Seus momentos:** os save states mais recentes com miniatura, de todos os jogos;
+  - **Conexão com o Alvanista:** conta, o que o ReEmu enxerga, aparelho e data da conexão, aviso quando os tokens estão na reserva do SQLite em vez do chaveiro, "Gerenciar apps" (abre o site) e "Desconectar" com a prévia do perfil local que volta.
+- **Backend (Rust):**
+  - `list_roms` traz o tempo de jogo; `list_recent_save_states` lista os mais recentes com miniatura, pulando o estado cuja ROM sumiu;
+  - o `card` do `/me` fica no espelho e no status. Um `/me` sem card (ou com `card: null`) mantém o card guardado **só se for a mesma conta**; outra conta nunca herda o card de quem saiu;
+  - `connected_at` é gravado ao conectar e removido ao desconectar; `device_label` identifica o aparelho;
+  - `alvanista_open_site('edit' | 'apps')` abre só essas duas páginas do site (qualquer outra é recusada).
+- **Frontend:** helpers puros em `profileData.ts` (somas, listas, `pickText`, `readableInk` com contraste mínimo de 4.5:1) e a página dividida em `ProfileHero`, `ReemuSections`, `AlvanistaCardBlock`, `MomentsRow` e `ConnectionCard`. Os hooks `useAlvanistaStatusSync` e `useAlvanistaConnect`/`useAlvanistaDisconnect` passaram a servir as duas telas (página e Configurações), no lugar da lógica que estava só em `SettingsProfile`. O fim da conexão zera o topo na hora, e conectar descarta leituras em voo.
+- **Não interferência (vale como na primeira peça):** sem marcador de sessão, nada lê o chaveiro e nada toca a rede. O teste A1 (`without_a_session_the_keyring_and_the_network_are_never_called`) foi ampliado para cobrir as novas leituras. Sem banco, a página não oferece o convite.
+- **Testes:**
+  - Rust: `status_carries_the_card_fetch_time_and_device_label`, `status_keeps_the_stored_card_when_me_sends_none`, `status_keeps_the_stored_card_when_me_sends_card_null`, `status_never_shows_a_stored_card_under_another_account`, `a_card_is_never_kept_under_another_account`, `a_null_card_keeps_the_stored_card`, `a_mirror_from_piece_1_reads_without_a_card`, `connected_at_follows_the_session`, `disconnected_status_has_no_card_connect_time_or_label`, `open_site_refuses_unknown_pages`, `recent_states_skip_a_state_whose_rom_is_gone`, `play_times_maps_every_rom`, `recent_with_thumbnail_orders_newest_first_and_skips_missing_thumbnails`, `recent_with_thumbnail_honours_limit`;
+  - vitest: `ProfilePage.test.tsx` (perfil local, conectado com e sem card, posição da capa, números, convite com biblioteca vazia, recentes e mais jogados, momentos, offline, atualizado, "Desconectar" sem recarregar, aviso de armazenamento inseguro, selo quebrado, ano de membro, tinta do chip do plano), `profileData.test.ts`, e o `useEffectiveProfile.test.tsx` e o `SettingsProfile.alvanista.test.tsx` ajustados.
+- **Fora desta peça:** enviar dados de jogo (sessões e tempo, pelo GAS) de volta ao Alvanista. Continua para depois, quando o Alvanista abrir essa parte da API de parceiros.
