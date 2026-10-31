@@ -46,7 +46,7 @@ const useStyles = makeStyles({
   bars: { display: 'flex', flexDirection: 'column', rowGap: '10px' },
   bar: {
     display: 'grid',
-    gridTemplateColumns: '36px minmax(0, 1fr) 72px',
+    gridTemplateColumns: '36px minmax(0, 1fr) 100px',
     columnGap: '10px',
     alignItems: 'center',
     width: '100%',

@@ -62,5 +62,11 @@ export function useAlvanistaStatusSync(
     endedShown.current = true
     push(sysToast(t('alvanista.ended'), 'Warning'))
     qc.setQueryData(ALVANISTA_STATUS_KEY, DISCONNECTED)
+    // O topo lê o estado guardado: zera junto (como ao desconectar), depois confirma.
+    void (async () => {
+      await qc.cancelQueries({ queryKey: ALVANISTA_CACHED_KEY })
+      qc.setQueryData(ALVANISTA_CACHED_KEY, DISCONNECTED)
+      void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
+    })()
   }, [status.ended, push, qc, t])
 }

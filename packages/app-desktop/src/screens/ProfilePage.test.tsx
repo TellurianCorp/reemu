@@ -284,6 +284,19 @@ describe('ProfilePage', () => {
     expect(messages).toContain('Conexão com o Alvanista encerrada')
   })
 
+  it('ended: the hero drops the Alvanista identity at once, even if the cached re-read never lands', async () => {
+    api.alvanistaCachedStatus.mockResolvedValueOnce(ON)
+    api.alvanistaCachedStatus.mockReturnValue(new Promise(() => {}))
+    api.alvanistaStatus.mockResolvedValue({ ...OFF, ended: true })
+    await mount()
+    const hero = section('profile-hero')!
+    expect(hero.textContent).toContain('Local')
+    expect(hero.textContent).not.toContain('toy')
+    expect(byText('Ver no Alvanista')).toBeUndefined()
+    const ended = useToastStore.getState().queue.filter((x) => x.message === 'Conexão com o Alvanista encerrada')
+    expect(ended.length).toBe(1)
+  })
+
   it('recent shows play time and relative date under the cover', async () => {
     const now = Math.floor(Date.now() / 1000)
     api.listRoms.mockResolvedValue([

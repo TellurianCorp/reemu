@@ -50,10 +50,14 @@ export function useAlvanistaConnect() {
     setOutcome(null)
     setConnecting(true)
     alvanistaConnect(i18n.language)
-      .then((next) => {
+      .then(async (next) => {
         if (mine !== attempt.current) return
         connectingRef.current = false
-        void qc.cancelQueries({ queryKey: ALVANISTA_STATUS_KEY })
+        // Uma leitura em voo ainda veria o estado antigo: descarta as duas.
+        await Promise.all([
+          qc.cancelQueries({ queryKey: ALVANISTA_STATUS_KEY }),
+          qc.cancelQueries({ queryKey: ALVANISTA_CACHED_KEY }),
+        ])
         qc.setQueryData(ALVANISTA_STATUS_KEY, next)
         // O topo e o corpo leem estados diferentes: os dois mudam juntos.
         qc.setQueryData(ALVANISTA_CACHED_KEY, next)
