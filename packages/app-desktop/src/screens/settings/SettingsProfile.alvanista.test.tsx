@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   alvanistaCancel: vi.fn(),
   alvanistaDisconnect: vi.fn(),
   alvanistaOpenProfile: vi.fn(),
+  alvanistaOpenSite: vi.fn(),
   getProfile: vi.fn(),
 }))
 
@@ -85,6 +86,7 @@ beforeEach(() => {
   api.alvanistaCachedStatus.mockResolvedValue(OFF)
   api.alvanistaCancel.mockResolvedValue(undefined)
   api.alvanistaOpenProfile.mockResolvedValue(undefined)
+  api.alvanistaOpenSite.mockResolvedValue(undefined)
   api.alvanistaDisconnect.mockResolvedValue(undefined)
   useToastStore.setState({ queue: [] })
 })
@@ -110,8 +112,10 @@ describe('SettingsProfile with Alvanista', () => {
     expect(host.querySelector('img[src="https://cdn.alvanista.com/a/toy.png"]')).toBeTruthy()
     expect(host.querySelector('input')).toBeNull()
     expect(byText('Entrar com Alvanista')).toBeUndefined()
+    // O editor do perfil no site, como em /perfil, não o perfil público.
     await act(async () => byText('Editar no Alvanista')!.click())
-    expect(api.alvanistaOpenProfile).toHaveBeenCalledTimes(1)
+    expect(api.alvanistaOpenSite).toHaveBeenCalledWith('edit')
+    expect(api.alvanistaOpenProfile).not.toHaveBeenCalled()
     expect(byText('Desconectar')).toBeTruthy()
   })
 

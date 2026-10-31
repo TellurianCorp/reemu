@@ -64,7 +64,9 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusSmall,
     backgroundColor: tokens.colorNeutralBackground3,
   },
+  barText: { display: 'block', minWidth: 0 },
   barName: {
+    display: 'block',
     fontSize: '13px',
     fontWeight: tokens.fontWeightSemibold,
     overflow: 'hidden',
@@ -72,12 +74,14 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
   },
   track: {
+    display: 'block',
     height: '6px',
     backgroundColor: tokens.colorNeutralBackground5,
     borderRadius: tokens.borderRadiusSmall,
     marginTop: '5px',
   },
   fill: {
+    display: 'block',
     height: '100%',
     backgroundColor: 'var(--reemuBrandAccent)',
     borderRadius: tokens.borderRadiusSmall,
@@ -100,8 +104,9 @@ export function ReemuNumbers({ roms, failed = false }: { roms: RomEntry[]; faile
   const { t } = useTranslation()
   const s = useStyles()
   const stats = profileStats(roms)
+  const time = stats.playTimeSecs > 0 ? formatPlayTime(stats.playTimeSecs) : t('profilePage.statTimeZero')
   const items: { key: string; value: string; label: string }[] = [
-    { key: 'time', value: formatPlayTime(stats.playTimeSecs), label: t('profilePage.statTime') },
+    { key: 'time', value: time, label: t('profilePage.statTime') },
     { key: 'games', value: String(stats.games), label: t('profilePage.statGames') },
     { key: 'systems', value: String(stats.systems), label: t('profilePage.statSystems') },
     { key: 'favorites', value: String(stats.favorites), label: t('profilePage.statFavorites') },
@@ -166,7 +171,8 @@ export function RecentRow({ roms }: { roms: RomEntry[] }) {
   )
 }
 
-/** "Mais jogados no ReEmu": barras relativas ao jogo mais jogado. */
+/** "Mais jogados no ReEmu": barras relativas ao jogo mais jogado. Cada linha é
+ *  um botão só com `span` dentro; o nome acessível é o título e o tempo. */
 export function MostPlayedCard({ roms }: { roms: RomEntry[] }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -183,15 +189,14 @@ export function MostPlayedCard({ roms }: { roms: RomEntry[] }) {
             as="button"
             appearance="transparent"
             className={s.bar}
-            aria-label={r.title}
             onClick={() => navigate(`/rom/${r.id}`)}
           >
             {r.boxart ? <img className={s.cover} src={r.boxart} alt="" loading="lazy" /> : <span className={s.cover} />}
-            <span>
-              <div className={s.barName}>{r.title}</div>
-              <div className={s.track}>
-                <div className={s.fill} style={{ width: `${Math.max(2, Math.round((r.playTimeSecs / top) * 100))}%` }} />
-              </div>
+            <span className={s.barText}>
+              <span className={s.barName}>{r.title}</span>
+              <span className={s.track} aria-hidden>
+                <span className={s.fill} style={{ width: `${Math.max(2, Math.round((r.playTimeSecs / top) * 100))}%` }} />
+              </span>
             </span>
             <span className={s.barTime}>{formatPlayTime(r.playTimeSecs)}</span>
           </Button>

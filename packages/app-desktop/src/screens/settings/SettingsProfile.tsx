@@ -11,7 +11,6 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlvanistaButton } from '../../components/AlvanistaButton'
 import { LoadingState } from '../../components/EmptyState'
@@ -27,7 +26,7 @@ import { sysToast } from '../../lib/toast'
 import { useAlvanistaConnect, useAlvanistaDisconnect } from '../../hooks/useAlvanistaConnect'
 import {
   alvanistaCachedStatus,
-  alvanistaOpenProfile,
+  alvanistaOpenSite,
   alvanistaStatus,
   getProfile,
 } from '../../lib/tauri'
@@ -73,10 +72,6 @@ export function SettingsProfile() {
 
   useAlvanistaStatusSync(status, alva.data, cached.data)
 
-  const openProfile = useCallback(() => {
-    void alvanistaOpenProfile().catch(() => {})
-  }, [])
-
   if (profile.isLoading || (cached.isLoading && alva.isLoading)) return <LoadingState />
 
   if (status.connected) {
@@ -111,7 +106,8 @@ export function SettingsProfile() {
           </MessageBar>
         )}
         <div className={s.actions}>
-          <Button appearance="secondary" onClick={openProfile} disabled={!status.profile_url}>
+          {/* O editor do perfil no site, como no "Editar no Alvanista" de /perfil. */}
+          <Button appearance="secondary" onClick={() => void alvanistaOpenSite('edit').catch(() => {})}>
             {t('alvanista.editOnAlvanista')}
           </Button>
           <Button
