@@ -429,6 +429,8 @@ export interface RomEntry {
   addedAt: number
   /** Aba "Favoritos" da biblioteca. */
   isFavorite: boolean
+  /** Tempo de jogo acumulado (s). */
+  playTimeSecs: number
 }
 export const listRoms = () => invoke<RomEntry[]>('list_roms')
 export const removeRom = (romId: string) => invoke<void>('remove_rom', { romId })

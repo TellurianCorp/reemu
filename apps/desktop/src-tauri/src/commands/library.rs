@@ -21,6 +21,8 @@ pub struct RomDto {
     pub added_at: i64,
     /// Aba "Favoritos" da biblioteca.
     pub is_favorite: bool,
+    /// Tempo de jogo acumulado (s) — o perfil soma e ranqueia sem uma chamada por ROM.
+    pub play_time_secs: u64,
 }
 
 /// Título de exibição de uma ROM: o que o usuário renomeou, senão o nome do
@@ -40,6 +42,7 @@ pub(crate) fn rom_title(r: &domain::library::Rom) -> String {
 pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let roms = repo.list().await.map_err(|e| e.to_string())?;
+    let play_times = repo.play_times().await.map_err(|e| e.to_string())?;
     Ok(roms
         .into_iter()
         .map(|r| {
@@ -52,6 +55,7 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
             let boxart = library_scan::libretro_boxart_url(&r.system_id, &title)
                 .map(|_| crate::covers::cover_url(&r.id));
             RomDto {
+                play_time_secs: play_times.get(&r.id).copied().unwrap_or(0),
                 boxart,
                 title,
                 id: r.id,
