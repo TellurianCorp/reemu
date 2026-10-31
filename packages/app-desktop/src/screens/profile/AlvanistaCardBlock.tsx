@@ -6,7 +6,16 @@ import { AlvanistaButton } from '../../components/AlvanistaButton'
 import { SectionHeader } from '../../components/SectionHeader'
 import { useAlvanistaConnect } from '../../hooks/useAlvanistaConnect'
 import type { AlvanistaCard } from '../../lib/tauri'
-import { pickText } from './profileData'
+import {
+  CARD_AGE_SHOWN_AFTER,
+  cardComputedAt,
+  cardLag,
+  cardTiles,
+  hasCardContent,
+  pickText,
+  playingNow,
+} from './profileData'
+import { relativeAge } from './relativeAge'
 
 const useStyles = makeStyles({
   card: {
@@ -48,6 +57,8 @@ const useStyles = makeStyles({
   promo: { display: 'flex', alignItems: 'center', columnGap: '16px' },
   promoSymbol: { width: '40px', height: '40px', flexShrink: 0 },
   promoText: { margin: '0 0 10px', color: tokens.colorNeutralForeground2, lineHeight: 1.45 },
+  // A idade do cartão quando ele é mais velho que a leitura (um `/me` sem cartão manteve o guardado).
+  age: { color: tokens.colorNeutralForeground3, fontSize: '12px', marginTop: '14px' },
   waiting: { display: 'flex', alignItems: 'center', columnGap: '12px', flexWrap: 'wrap' },
   warn: { marginTop: '10px' },
 })
@@ -63,41 +74,49 @@ function BadgeIcon({ badge, className }: { badge: NonNullable<AlvanistaCard['bad
   )
 }
 
-/** "No Alvanista": o que o cartão trouxe; cada linha some quando o dado falta. */
-export function AlvanistaCardBlock({ card }: { card: AlvanistaCard }) {
+/**
+ * "No Alvanista": o que o cartão trouxe; cada linha some quando o dado falta,
+ * e sem nada para mostrar a seção some inteira. Quando o cartão é mais velho
+ * que a leitura do status (um `/me` sem cartão manteve o guardado), diz a
+ * própria idade, e "jogando agora" só aparece enquanto ele é recente.
+ */
+export function AlvanistaCardBlock({ card, fetchedAt }: { card: AlvanistaCard; fetchedAt: number | null }) {
   const { t, i18n } = useTranslation()
   const s = useStyles()
+  const [nowMs] = useState(() => Date.now())
+  if (!hasCardContent(card, fetchedAt)) return null
   const num = (n: number) => n.toLocaleString(i18n.language)
-  const collection = card.proofs?.collection
-  const trophies = card.proofs?.trophies
-  const ledger = card.ledger
-  const tiles: { key: string; value: string; label: string; nets?: string[] }[] = []
-  if (collection)
-    tiles.push({
-      key: 'collection',
-      value: num(collection.games),
-      label: collection.platforms
-        ? t('profilePage.alvaCollectionPlatforms', { count: collection.platforms })
-        : t('profilePage.alvaCollection'),
-    })
-  if (trophies)
-    tiles.push({
-      key: 'trophies',
-      value: num(trophies.count),
-      label: t('profilePage.alvaTrophies'),
-      nets: trophies.networks,
-    })
-  if (ledger?.hours != null)
-    tiles.push({ key: 'hours', value: `${num(ledger.hours)} h`, label: t('profilePage.alvaHours') })
-  if (ledger?.finished != null)
-    tiles.push({ key: 'finished', value: num(ledger.finished), label: t('profilePage.alvaFinished') })
-  if (ledger?.checkins != null)
-    tiles.push({ key: 'checkins', value: num(ledger.checkins), label: t('profilePage.alvaCheckins') })
-  if (ledger?.gamers != null)
-    tiles.push({ key: 'gamers', value: num(ledger.gamers), label: t('profilePage.alvaGamers') })
+  const tiles = cardTiles(card).map((x) => {
+    switch (x.key) {
+      case 'collection':
+        return {
+          ...x,
+          shown: num(x.value),
+          label: x.platforms
+            ? t('profilePage.alvaCollectionPlatforms', { count: x.platforms })
+            : t('profilePage.alvaCollection'),
+        }
+      case 'trophies':
+        return { ...x, shown: num(x.value), label: t('profilePage.alvaTrophies') }
+      case 'hours':
+        return { ...x, shown: `${num(x.value)} h`, label: t('profilePage.alvaHours') }
+      case 'finished':
+        return { ...x, shown: num(x.value), label: t('profilePage.alvaFinished') }
+      case 'checkins':
+        return { ...x, shown: num(x.value), label: t('profilePage.alvaCheckins') }
+      case 'gamers':
+        return { ...x, shown: num(x.value), label: t('profilePage.alvaGamers') }
+    }
+  })
   const recent = (card.badges?.recent ?? []).slice(0, 4)
   const total = card.badges?.count ?? 0
-  const now = card.playing_now
+  const now = playingNow(card, fetchedAt)
+  const lag = cardLag(card, fetchedAt)
+  const computedAt = cardComputedAt(card)
+  const age =
+    lag != null && lag > CARD_AGE_SHOWN_AFTER && computedAt != null
+      ? relativeAge(computedAt, nowMs, i18n.language)
+      : null
 
   return (
     <div className={s.card} data-testid="profile-alvanista">
@@ -110,12 +129,12 @@ export function AlvanistaCardBlock({ card }: { card: AlvanistaCard }) {
           {tiles.map((x) => (
             <div key={x.key} data-tile={x.key}>
               <div className={s.value} data-value>
-                {x.value}
+                {x.shown}
               </div>
               <div className={s.label}>{x.label}</div>
-              {x.nets && x.nets.length > 0 && (
+              {x.networks && x.networks.length > 0 && (
                 <div className={s.nets}>
-                  {x.nets.map((n) => (
+                  {x.networks.map((n) => (
                     <span key={n} className={s.net}>
                       {n}
                     </span>
@@ -141,6 +160,11 @@ export function AlvanistaCardBlock({ card }: { card: AlvanistaCard }) {
             <div className={s.label}>{t('profilePage.alvaPlaying')}</div>
             <div className={s.nowTitle}>{now.title}</div>
           </div>
+        </div>
+      )}
+      {age && (
+        <div className={s.age} data-testid="profile-alvanista-age">
+          {t('profilePage.alvaCardAge', { age })}
         </div>
       )}
     </div>

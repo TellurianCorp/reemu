@@ -297,6 +297,40 @@ describe('ProfilePage', () => {
     expect(ended.length).toBe(1)
   })
 
+  it('a library read error is not an empty library: no invitation, a neutral line instead', async () => {
+    api.listRoms.mockRejectedValue('db')
+    await mount()
+    const s = section('profile-numbers')!
+    expect(s.textContent).not.toContain('Jogue algo para ver seus números aqui.')
+    expect(s.textContent).toContain('Não foi possível ler a biblioteca.')
+    expect(s.querySelector('[data-stat]')).toBeNull()
+    expect(section('profile-recent')).toBeNull()
+    expect(section('profile-most-played')).toBeNull()
+  })
+
+  it('a failed local profile read while disconnected shows a minimal local hero, not a spinner', async () => {
+    api.getProfile.mockRejectedValue('db')
+    await mount()
+    const hero = section('profile-hero')!
+    expect(hero).toBeTruthy()
+    expect(hero.textContent).toContain('Jogador')
+    expect(byText('Editar perfil')).toBeTruthy()
+    expect(section('profile-alvanista-invite')).toBeTruthy()
+  })
+
+  it('without a database at all the page still renders: local hero, neutral library line, no invitation', async () => {
+    api.getProfile.mockRejectedValue('no db')
+    api.alvanistaCachedStatus.mockRejectedValue('no db')
+    api.alvanistaStatus.mockRejectedValue('no db')
+    api.listRoms.mockRejectedValue('no db')
+    api.listRecentSaveStates.mockRejectedValue('no db')
+    await mount()
+    expect(section('profile-hero')!.textContent).toContain('Jogador')
+    expect(section('profile-numbers')!.textContent).toContain('Não foi possível ler a biblioteca.')
+    expect(section('profile-alvanista-invite')).toBeNull()
+    expect(section('profile-cols')).toBeNull()
+  })
+
   it('recent shows play time and relative date under the cover', async () => {
     const now = Math.floor(Date.now() / 1000)
     api.listRoms.mockResolvedValue([
@@ -381,6 +415,38 @@ describe('ProfilePage', () => {
       expect(section('profile-alvanista-badges')).toBeNull()
       expect(section('profile-alvanista-now')).toBeNull()
       expect(section('profile-alvanista')!.querySelector('[data-tile="hours"]')).toBeTruthy()
+    })
+
+    it('a card computed three days before the status read shows its own age and no playing now', async () => {
+      const now = Math.floor(Date.now() / 1000)
+      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 3 * 86400) * 1000).toISOString() })
+      await mount()
+      const b = section('profile-alvanista')!
+      expect(b.textContent).toContain('atualizado há 3 dias')
+      expect(section('profile-alvanista-now')).toBeNull()
+      expect(b.textContent).not.toContain('Jogando agora')
+    })
+
+    it('a fresh card shows no age and keeps playing now; ten minutes old shows the age and still plays', async () => {
+      const now = Math.floor(Date.now() / 1000)
+      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 60) * 1000).toISOString() })
+      await mount()
+      expect(section('profile-alvanista')!.textContent).not.toContain('atualizado há')
+      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
+      await unmount()
+      host.remove()
+      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 600) * 1000).toISOString() })
+      await mount()
+      expect(section('profile-alvanista')!.textContent).toContain('atualizado há 10 minutos')
+      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
+    })
+
+    it('a card with nothing for No Alvanista hides the whole block, header included', async () => {
+      connect({}, { identity: { level: 3 } })
+      await mount()
+      expect(section('profile-alvanista')).toBeNull()
+      expect(host.textContent).not.toContain('No Alvanista')
+      expect(section('profile-chips')!.textContent).toContain('Nível 3')
     })
 
     it('a connected status with a null card hides No Alvanista', async () => {
@@ -526,6 +592,27 @@ describe('ProfilePage', () => {
       expect(chip.style.color).not.toBe('')
       const level = host.querySelector('[data-chip="level"]') as HTMLElement
       expect(level.style.color).toBe('')
+    })
+
+    it('the two-column row is not rendered empty, and a lone side takes the whole row', async () => {
+      // conectado sem cartão e sem jogo com tempo: nada dos dois lados
+      connect({}, null)
+      await mount()
+      expect(section('profile-cols')).toBeNull()
+      await unmount()
+      host.remove()
+      // só o bloco do Alvanista
+      connect()
+      await mount()
+      expect(section('profile-cols')!.getAttribute('data-sides')).toBe('1')
+      expect(section('profile-alvanista')).toBeTruthy()
+      await unmount()
+      host.remove()
+      // os dois lados
+      api.listRoms.mockResolvedValue([rom('a', { playTimeSecs: 60 })])
+      connect()
+      await mount()
+      expect(section('profile-cols')!.getAttribute('data-sides')).toBe('2')
     })
   })
 })

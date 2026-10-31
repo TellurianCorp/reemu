@@ -873,6 +873,9 @@ const en: Messages = {
     connManage: 'Manage connected apps on Alvanista',
     connBack: 'When you disconnect, your local profile comes back:',
     connBackNoBio: 'no bio',
+    alvaCardAge: 'updated {{age}}',
+    defaultName: 'Player',
+    libraryError: 'Could not read the library.',
   },
   shaders: {
     extracting: 'Extracting shader pack…',

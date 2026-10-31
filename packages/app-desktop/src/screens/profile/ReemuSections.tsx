@@ -91,8 +91,12 @@ const useStyles = makeStyles({
   },
 })
 
-/** "No ReEmu": os quatro números; biblioteca vazia, só o convite a jogar. */
-export function ReemuNumbers({ roms }: { roms: RomEntry[] }) {
+/**
+ * "No ReEmu": os quatro números; biblioteca vazia, só o convite a jogar. Uma
+ * leitura que falhou não é uma biblioteca vazia: nem números nem convite, só
+ * uma linha neutra.
+ */
+export function ReemuNumbers({ roms, failed = false }: { roms: RomEntry[]; failed?: boolean }) {
   const { t } = useTranslation()
   const s = useStyles()
   const stats = profileStats(roms)
@@ -105,7 +109,11 @@ export function ReemuNumbers({ roms }: { roms: RomEntry[] }) {
   return (
     <section className={s.section} data-testid="profile-numbers">
       <SectionHeader title={t('profilePage.reemuTitle')} subtitle={t('profilePage.reemuSub')} />
-      {roms.length === 0 ? (
+      {failed ? (
+        <div className={s.invite} data-testid="profile-library-error">
+          {t('profilePage.libraryError')}
+        </div>
+      ) : roms.length === 0 ? (
         <div className={s.invite}>{t('profilePage.invite')}</div>
       ) : (
         <div className={s.stats}>
