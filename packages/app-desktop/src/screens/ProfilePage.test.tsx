@@ -5,7 +5,8 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../stores/useToastStore'
-import type { AlvanistaStatus, RecentSaveState, RomEntry } from '../lib/tauri'
+import type { AlvanistaCard, AlvanistaStatus, RecentSaveState, RomEntry } from '../lib/tauri'
+import { readableInk } from './profile/profileData'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -18,6 +19,9 @@ const api = vi.hoisted(() => ({
   alvanistaCachedStatus: vi.fn(),
   alvanistaOpenProfile: vi.fn(),
   alvanistaOpenSite: vi.fn(),
+  alvanistaDisconnect: vi.fn(),
+  alvanistaConnect: vi.fn(),
+  alvanistaCancel: vi.fn(),
 }))
 
 vi.mock('../lib/tauri', async (orig) => ({
@@ -112,6 +116,8 @@ beforeEach(() => {
   api.alvanistaCachedStatus.mockResolvedValue(OFF)
   api.alvanistaOpenProfile.mockResolvedValue(undefined)
   api.alvanistaOpenSite.mockResolvedValue(undefined)
+  api.alvanistaDisconnect.mockResolvedValue(undefined)
+  api.alvanistaCancel.mockResolvedValue(undefined)
   useToastStore.setState({ queue: [] })
 })
 afterEach(async () => {
@@ -238,7 +244,8 @@ describe('ProfilePage', () => {
     api.alvanistaStatus.mockResolvedValue(st)
     await mount()
     expect(host.textContent).toContain('Sem conexão: mostrando o último perfil salvo')
-    expect(host.textContent).not.toContain('O chaveiro do sistema não está disponível')
+    // o aviso fica só no cartão de conexão, nunca no topo
+    expect(section('profile-hero')!.textContent).not.toContain('O chaveiro do sistema não está disponível')
     expect(host.textContent).toContain('toy')
   })
 
@@ -287,5 +294,188 @@ describe('ProfilePage', () => {
     const lines = [...section('profile-recent')!.querySelectorAll('[data-caption]')].map((e) => e.textContent)
     expect(lines[0]).toBe('1 h · há 3 dias')
     expect(lines[1]).toBe('há 5 dias')
+  })
+
+  describe('Alvanista card', () => {
+    const FULL: AlvanistaCard = {
+      member_since: 1262304000,
+      identity: {
+        location: 'Newcastle Upon Tyne',
+        level: 19,
+        tier: { slug: 'collector', rank: 3, name: { pt: 'Colecionador', en: 'Collector' } },
+      },
+      reino_title_text: { pt: 'Conde de Lola', en: 'Count of Lola' },
+      palette: { base: '#111111', mid: '#e0b84a', accent: '#ffffff', source: 'cover' },
+      proofs: { collection: { games: 2047, platforms: 44 }, trophies: { count: 3943, networks: ['PSN', 'Xbox'] } },
+      ledger: { hours: 614, finished: 23, checkins: 244, gamers: 173 },
+      badges: {
+        count: 27,
+        recent: [1, 2, 3, 4, 5].map((n) => ({ name: `Badge ${n}`, icon_url: `https://cdn.gamekave.net/b${n}.webp` })),
+      },
+      playing_now: { title: 'Silver Pines', cover_url: 'https://cdn.gamekave.net/sp.jpg' },
+    }
+    const connect = (over: Partial<AlvanistaStatus> = {}, card: AlvanistaCard | null = FULL) => {
+      const st = {
+        ...ON,
+        card,
+        connected_at: 1793000000,
+        device_label: 'ReEmu (Windows)',
+        profile_url: 'https://www.alvanista.com/u/toy',
+        ...over,
+      }
+      api.alvanistaCachedStatus.mockResolvedValue(st)
+      api.alvanistaStatus.mockResolvedValue(st)
+      return st
+    }
+
+    it('card shows level, tier, Reino title in the UI language, location and member since', async () => {
+      connect()
+      await mount()
+      const chips = section('profile-chips')!
+      expect(chips.textContent).toContain('Nível 19')
+      expect(chips.textContent).toContain('Colecionador')
+      expect(chips.textContent).not.toContain('Collector')
+      expect(chips.textContent).toContain('Conde de Lola')
+      expect(chips.textContent).toContain('Alvanista')
+      const meta = section('profile-meta')!
+      expect(meta.textContent).toContain('Newcastle Upon Tyne')
+      expect(meta.textContent).toContain('Membro desde 2010')
+    })
+
+    it('No Alvanista shows collection, trophies with networks, hours, finished, check-ins, gamers, up to four badges with the total, playing now', async () => {
+      connect()
+      await mount()
+      const b = section('profile-alvanista')!
+      const tile = (k: string) => b.querySelector(`[data-tile="${k}"]`)!.textContent!
+      expect(tile('collection')).toContain('2.047')
+      expect(tile('collection')).toContain('44 plataformas')
+      expect(tile('trophies')).toContain('3.943')
+      expect(tile('trophies')).toContain('PSN')
+      expect(tile('trophies')).toContain('Xbox')
+      expect(tile('hours')).toContain('614 h')
+      expect(tile('finished')).toContain('23')
+      expect(tile('checkins')).toContain('244')
+      expect(tile('gamers')).toContain('173')
+      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(4)
+      expect(section('profile-alvanista-badges')!.textContent).toContain('27 badges')
+      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
+    })
+
+    it('a card without badges or playing now hides just those rows', async () => {
+      connect({}, { ...FULL, badges: undefined, playing_now: undefined })
+      await mount()
+      expect(section('profile-alvanista')).toBeTruthy()
+      expect(section('profile-alvanista-badges')).toBeNull()
+      expect(section('profile-alvanista-now')).toBeNull()
+      expect(section('profile-alvanista')!.querySelector('[data-tile="hours"]')).toBeTruthy()
+    })
+
+    it('a connected status with a null card hides No Alvanista', async () => {
+      connect({}, null)
+      await mount()
+      expect(section('profile-alvanista')).toBeNull()
+      expect(section('profile-alvanista-invite')).toBeNull()
+      expect(section('profile-connection')).toBeTruthy()
+    })
+
+    it('connection card: device label, connected since, keychain or the insecure-storage warning, Gerenciar apps opens apps, Desconectar returns to the local profile without reload', async () => {
+      connect()
+      await mount()
+      const c = section('profile-connection')!
+      expect(c.textContent).toContain('toy')
+      expect(c.textContent).toContain('alvanista.com/u/toy')
+      expect(c.textContent).toContain('ReEmu (Windows)')
+      expect(c.textContent).toContain('conectado desde')
+      expect(c.textContent).toContain('guardada no chaveiro do sistema')
+      expect(c.textContent).not.toContain('O chaveiro do sistema não está disponível')
+      const back = section('profile-connection-back')!
+      expect(back.textContent).toContain('Local')
+      await act(async () => byText('Gerenciar apps conectados no Alvanista')!.click())
+      expect(api.alvanistaOpenSite).toHaveBeenCalledWith('apps')
+      // depois de desconectar, o estado guardado já é o desconectado
+      api.alvanistaCachedStatus.mockResolvedValue(OFF)
+      api.alvanistaStatus.mockResolvedValue(OFF)
+      await act(async () => byText('Desconectar')!.click())
+      await settle()
+      expect(api.alvanistaDisconnect).toHaveBeenCalledTimes(1)
+      expect(section('profile-connection')).toBeNull()
+      expect(section('profile-alvanista')).toBeNull()
+      expect(section('profile-chips')).toBeNull()
+      expect(section('profile-alvanista-invite')).toBeTruthy()
+      expect(host.textContent).toContain('bio local')
+      expect(useToastStore.getState().queue.map((x) => x.message)).toContain(
+        'Desconectado do Alvanista. Seu perfil local voltou.',
+      )
+    })
+
+    it('disconnect drops the stored card at once, even before the cached state is re-read', async () => {
+      connect()
+      await mount()
+      await act(async () => byText('Desconectar')!.click())
+      await settle()
+      expect(section('profile-alvanista')).toBeNull()
+      expect(section('profile-connection')).toBeNull()
+    })
+
+    it('insecure storage shows the warning only in the connection card', async () => {
+      connect({ insecure_storage: true })
+      await mount()
+      const text = host.textContent!
+      expect(section('profile-connection')!.textContent).toContain('O chaveiro do sistema não está disponível')
+      expect(text.split('O chaveiro do sistema não está disponível').length - 1).toBe(1)
+      expect(section('profile-connection')!.textContent).toContain('guardada no banco do ReEmu')
+    })
+
+    it('connected_at null hides connected since', async () => {
+      connect({ connected_at: null })
+      await mount()
+      const c = section('profile-connection')!
+      expect(c.textContent).not.toContain('conectado desde')
+      expect(c.textContent).toContain('ReEmu (Windows)')
+    })
+
+    it('local state shows the invitation with the Entrar com Alvanista button and no connection card', async () => {
+      await mount()
+      const inv = section('profile-alvanista-invite')!
+      expect(inv).toBeTruthy()
+      expect(inv.textContent).toContain('Entrar com Alvanista')
+      expect(section('profile-connection')).toBeNull()
+      expect(section('profile-alvanista')).toBeNull()
+      expect(api.alvanistaConnect).not.toHaveBeenCalled()
+    })
+
+    it('the invitation button runs the connect flow and the page turns connected', async () => {
+      const st = connect()
+      api.alvanistaCachedStatus.mockResolvedValue(OFF)
+      api.alvanistaStatus.mockResolvedValue(OFF)
+      api.alvanistaConnect.mockResolvedValue(st)
+      await mount()
+      api.alvanistaCachedStatus.mockResolvedValue(st)
+      await act(async () => byText('Entrar com Alvanista')!.click())
+      await settle()
+      expect(api.alvanistaConnect).toHaveBeenCalledTimes(1)
+      expect(section('profile-alvanista')).toBeTruthy()
+      expect(section('profile-connection')).toBeTruthy()
+    })
+
+    it('a failed connect shows the outcome in the invitation', async () => {
+      api.alvanistaConnect.mockRejectedValue('denied')
+      await mount()
+      await act(async () => byText('Entrar com Alvanista')!.click())
+      await settle()
+      expect(section('profile-alvanista-invite')!.textContent).toContain('Você não autorizou o acesso')
+    })
+
+    it('tier chip ink comes from readableInk(palette.mid)', async () => {
+      connect()
+      await mount()
+      const chip = host.querySelector('[data-chip="tier"]') as HTMLElement
+      const probe = document.createElement('span')
+      probe.style.color = readableInk('#e0b84a')
+      expect(chip.style.color).toBe(probe.style.color)
+      expect(chip.style.color).not.toBe('')
+      const level = host.querySelector('[data-chip="level"]') as HTMLElement
+      expect(level.style.color).toBe('')
+    })
   })
 })

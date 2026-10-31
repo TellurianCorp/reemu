@@ -10,6 +10,8 @@ import {
   listRecentSaveStates,
   listRoms,
 } from '../lib/tauri'
+import { AlvanistaCardBlock, AlvanistaInvite } from './profile/AlvanistaCardBlock'
+import { ConnectionCard } from './profile/ConnectionCard'
 import { MomentsRow } from './profile/MomentsRow'
 import { ProfileHero } from './profile/ProfileHero'
 import { mostPlayed, recentlyPlayed } from './profile/profileData'
@@ -29,8 +31,8 @@ const useStyles = makeStyles({
 /**
  * Meu perfil (`/perfil`), tela cheia na área de conteúdo da casca: o topo,
  * "No ReEmu", "Jogados recentemente", "Mais jogados no ReEmu" e "Seus
- * momentos". Só lê a biblioteca, os saves, o perfil local e o status do
- * Alvanista (guardado e completo); sem sessão não toca no chaveiro nem na rede.
+ * momentos", "No Alvanista" (ou o convite) e "Conexão com o Alvanista". Só lê a
+ * biblioteca, os saves, o perfil local e o status do Alvanista (guardado e completo); sem sessão não toca no chaveiro nem na rede.
  */
 export function ProfilePage() {
   const s = useStyles()
@@ -55,6 +57,8 @@ export function ProfilePage() {
   const most = useMemo(() => mostPlayed(all, 5), [all])
 
   if (!profile || roms.isPending) return <LoadingState />
+  // Pelo status, não pelo perfil: ao desconectar o status zera na hora.
+  const connected = !!status?.connected
 
   return (
     <div className={s.page}>
@@ -68,9 +72,14 @@ export function ProfilePage() {
       <RecentRow roms={recent} />
       <div className={s.cols}>
         <MostPlayedCard roms={most} />
-        {/* "No Alvanista" entra aqui, ao lado de "Mais jogados". */}
+        {connected ? (
+          status?.card ? <AlvanistaCardBlock card={status.card} /> : null
+        ) : (
+          <AlvanistaInvite />
+        )}
       </div>
       <MomentsRow states={saves.data ?? []} />
+      {connected && status && <ConnectionCard status={status} />}
     </div>
   )
 }
