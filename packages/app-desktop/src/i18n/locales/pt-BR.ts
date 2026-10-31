@@ -865,7 +865,7 @@ const ptBR = {
     connTitle: 'Conexão com o Alvanista',
     connAccount: 'Conta',
     connSees: 'O ReEmu vê',
-    connSeesValue: 'seu perfil (nome, avatar, capa e bio) e o cartão do Alvanista: nível, coleção, troféus, badges e o que você está jogando',
+    connSeesValue: 'seu perfil (nome, avatar, capa, bio, local e membro desde); nível, tier e título do Reino; coleção, plataformas, troféus, horas, zerados, check-ins, gamers e badges; quantos posts, artigos, reviews e comunidades; o que você está jogando agora',
     connDevice: 'Neste aparelho',
     connSince: 'conectado desde {{date}}',
     connSession: 'Sessão',

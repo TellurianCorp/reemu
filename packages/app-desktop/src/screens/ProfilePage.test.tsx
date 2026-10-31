@@ -298,7 +298,7 @@ describe('ProfilePage', () => {
 
   describe('Alvanista card', () => {
     const FULL: AlvanistaCard = {
-      member_since: 1262304000,
+      member_since: 2010,
       identity: {
         location: 'Newcastle Upon Tyne',
         level: 19,
@@ -411,10 +411,47 @@ describe('ProfilePage', () => {
     it('disconnect drops the stored card at once, even before the cached state is re-read', async () => {
       connect()
       await mount()
+      // a releitura do estado guardado nunca chega: o topo não pode esperar por ela
+      api.alvanistaCachedStatus.mockReturnValue(new Promise(() => {}))
       await act(async () => byText('Desconectar')!.click())
       await settle()
       expect(section('profile-alvanista')).toBeNull()
       expect(section('profile-connection')).toBeNull()
+      expect(section('profile-alvanista-invite')).toBeTruthy()
+      const hero = section('profile-hero')!
+      expect(hero.textContent).toContain('Local')
+      expect(hero.textContent).not.toContain('toy')
+      expect(byText('Ver no Alvanista')).toBeUndefined()
+      expect(byText('Editar no Alvanista')).toBeUndefined()
+    })
+
+    it('member_since is a year: shown as is, hidden when it is not a plausible year', async () => {
+      connect({}, { ...FULL, member_since: 2010 })
+      await mount()
+      expect(section('profile-meta')!.textContent).toContain('Membro desde 2010')
+      await unmount()
+      host.remove()
+      connect({}, { ...FULL, member_since: 5 })
+      await mount()
+      expect(section('profile-meta')!.textContent).not.toContain('Membro desde')
+      expect(section('profile-meta')!.textContent).toContain('Newcastle')
+    })
+
+    it('without a database (cached state errors) the invitation is not offered', async () => {
+      api.alvanistaCachedStatus.mockRejectedValue('no db')
+      await mount()
+      expect(section('profile-alvanista-invite')).toBeNull()
+      expect(byText('Entrar com Alvanista')).toBeUndefined()
+    })
+
+    it('a broken badge image is hidden', async () => {
+      connect()
+      await mount()
+      const img = section('profile-alvanista-badges')!.querySelector('img') as HTMLImageElement
+      await act(async () => {
+        img.dispatchEvent(new Event('error'))
+      })
+      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(3)
     })
 
     it('insecure storage shows the warning only in the connection card', async () => {

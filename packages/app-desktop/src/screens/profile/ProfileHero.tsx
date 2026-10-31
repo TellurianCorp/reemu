@@ -122,7 +122,7 @@ export function ProfileHero({
   const tierName = pickText(identity?.tier?.name, i18n.language)
   const reino = pickText(card?.reino_title_text, i18n.language)
   const palette = card?.palette
-  const memberYear = card?.member_since != null ? new Date(card.member_since * 1000).getFullYear() : null
+  const memberYear = card?.member_since != null && card.member_since >= 1900 ? card.member_since : null
   const location = identity?.location || null
 
   return (
