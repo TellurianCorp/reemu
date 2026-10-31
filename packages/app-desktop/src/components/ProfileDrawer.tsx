@@ -151,7 +151,7 @@ export function ProfileDrawer({
             size="large"
             className={item}
             icon={<PersonRegular />}
-            onClick={() => go("/settings/perfil")}
+            onClick={() => go("/perfil")}
           >
             {t("shell.myProfile")}
           </Button>
