@@ -213,3 +213,47 @@ pub async fn delete_save_state(state: State<'_, AppState>, state_id: String) -> 
         .await
         .map_err(|e| e.to_string())
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentSaveStateDto {
+    pub id: String,
+    pub rom_id: String,
+    pub rom_title: String,
+    pub slot: Option<u32>,
+    pub created_at: i64,
+    pub play_time_at_save: Option<u64>,
+}
+
+/// Os save states mais recentes com miniatura, de todos os jogos. Estado cuja
+/// ROM saiu da biblioteca fica de fora. A miniatura carrega por
+/// `read_save_thumbnail`.
+#[tauri::command]
+pub async fn list_recent_save_states(
+    state: State<'_, AppState>,
+    limit: u32,
+) -> Result<Vec<RecentSaveStateDto>, String> {
+    use domain::library::RomRepository;
+    let pool = pool(&state)?;
+    let repo = db::SaveStateRepo::new(pool.clone());
+    let roms = db::RomsRepo::new(pool);
+    let states = repo
+        .recent_with_thumbnail(limit.clamp(1, 24))
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::with_capacity(states.len());
+    for m in states {
+        let Some(rom) = roms.get(&m.rom_id).await.map_err(|e| e.to_string())? else {
+            continue;
+        };
+        out.push(RecentSaveStateDto {
+            rom_title: rom_title(&rom),
+            id: m.id,
+            rom_id: m.rom_id,
+            slot: m.slot,
+            created_at: m.created_at,
+            play_time_at_save: m.play_time_at_save,
+        });
+    }
+    Ok(out)
+}
