@@ -233,16 +233,28 @@ pub async fn list_recent_save_states(
     state: State<'_, AppState>,
     limit: u32,
 ) -> Result<Vec<RecentSaveStateDto>, String> {
-    use domain::library::RomRepository;
     let pool = pool(&state)?;
-    let repo = db::SaveStateRepo::new(pool.clone());
-    let roms = db::RomsRepo::new(pool);
-    let states = repo
+    recent_states_with_titles(
+        &db::SaveStateRepo::new(pool.clone()),
+        &db::RomsRepo::new(pool),
+        limit,
+    )
+    .await
+}
+
+/// Junta cada estado recente ao título da sua ROM; pula o de ROM ausente.
+async fn recent_states_with_titles(
+    states: &db::SaveStateRepo,
+    roms: &db::RomsRepo,
+    limit: u32,
+) -> Result<Vec<RecentSaveStateDto>, String> {
+    use domain::library::RomRepository;
+    let recent = states
         .recent_with_thumbnail(limit.clamp(1, 24))
         .await
         .map_err(|e| e.to_string())?;
-    let mut out = Vec::with_capacity(states.len());
-    for m in states {
+    let mut out = Vec::with_capacity(recent.len());
+    for m in recent {
         let Some(rom) = roms.get(&m.rom_id).await.map_err(|e| e.to_string())? else {
             continue;
         };
@@ -256,4 +268,61 @@ pub async fn list_recent_save_states(
         });
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::library::{Rom, RomRepository};
+    use domain::save_state::{SaveStateMetadata, SaveStateRepository};
+
+    fn meta(id: &str, rom_id: &str, created_at: i64) -> SaveStateMetadata {
+        SaveStateMetadata {
+            id: id.into(),
+            rom_id: rom_id.into(),
+            core_id: "core".into(),
+            slot: Some(0),
+            file_path: format!("/saves/{id}.state"),
+            thumbnail_path: Some(format!("/saves/{id}.png")),
+            created_at,
+            play_time_at_save: None,
+        }
+    }
+
+    /// ROM ausente não derruba a lista: o estado some e o resto volta com título.
+    #[tokio::test]
+    async fn recent_states_skip_a_state_whose_rom_is_gone() {
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms = db::RomsRepo::new(pool.clone());
+        let states = db::SaveStateRepo::new(pool.clone());
+        roms.add(&Rom {
+            id: "vivo".into(),
+            file_path: "/roms/Super Game.zip".into(),
+            crc32: "C".into(),
+            md5: "M".into(),
+            system_id: "nes".into(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+        })
+        .await
+        .unwrap();
+        states.record_state(&meta("ok", "vivo", 100)).await.unwrap();
+        // O pool in-memory tem uma conexão só, então o PRAGMA vale pra ela:
+        // com FK desligada o estado órfão entra (o cascade o apagaria).
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&pool)
+            .await
+            .unwrap();
+        states
+            .record_state(&meta("orfao", "removida", 200))
+            .await
+            .unwrap();
+
+        let out = recent_states_with_titles(&states, &roms, 10).await.unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, "ok");
+        assert_eq!(out[0].rom_title, "Super Game");
+    }
 }

@@ -76,6 +76,8 @@ sysinfo = { version = "0.36.1", default-features = false, features = ["system"] 
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# PRAGMA foreign_keys no teste do join de save states recentes
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
 # logs do lado do app nos testes de hardware (ex.: diagnóstico de áudio)
 env_logger = "0.11"
 # Teste ponta-a-ponta do HW render Vulkan (etapa 12): carrega o core de teste
