@@ -19,7 +19,7 @@ vi.mock('../lib/tauri', async (orig) => ({
   ...api,
 }))
 
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { NoGamesState } from '../components/NoGamesState'
 import { ProfileDrawer } from '../components/ProfileDrawer'
 import {
@@ -208,12 +208,17 @@ describe('NoGamesState', () => {
   })
 })
 
+function Where() {
+  return <div data-testid="where">{useLocation().pathname}</div>
+}
+
 /** O drawer como o `AppShell` o monta: perfil efetivo e capa como banner. */
 function Drawer() {
   const p = useEffectiveProfile()
   return p ? (
     <MemoryRouter>
       <ProfileDrawer open onOpenChange={() => {}} profile={p} bannerUrl={p.bannerUrl} />
+      <Where />
     </MemoryRouter>
   ) : null
 }
@@ -237,6 +242,13 @@ describe('ProfileDrawer', () => {
     expect(text).toContain('bio do Alvanista')
     expect(text).not.toContain('bio local')
     expect(document.body.innerHTML).toContain('https://cdn.alvanista.com/h/toy.png')
+  })
+
+  it('Meu perfil navigates to /perfil', async () => {
+    await mount(<Drawer />)
+    const item = [...document.body.querySelectorAll('button')].find((b) => b.textContent?.includes('Meu perfil'))!
+    await act(async () => item.click())
+    expect(document.body.querySelector('[data-testid="where"]')?.textContent).toBe('/perfil')
   })
 
   it('disconnected: the local name and bio, theme colors in the banner', async () => {

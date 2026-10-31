@@ -3,6 +3,7 @@ import { AppShell } from './layouts/AppShell'
 import { RootLayout } from './layouts/RootLayout'
 import { SettingsLayout } from './layouts/SettingsLayout'
 import { Home } from './screens/Home'
+import { ProfilePage } from './screens/ProfilePage'
 import { Library } from './screens/Library'
 import { Onboarding } from './screens/Onboarding'
 import { RouteError } from './components/RouteError'
@@ -43,6 +44,7 @@ export const router = createHashRouter([
             children: [
               { index: true, element: <Home /> },
               { path: 'library', element: <Library /> },
+              { path: 'perfil', element: <ProfilePage /> },
               { path: 'library/:platform', element: <PlatformLibrary /> },
               { path: 'rom/:romId', element: <RomDetail /> },
               {
