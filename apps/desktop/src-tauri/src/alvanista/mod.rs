@@ -1151,7 +1151,7 @@ mod tests {
         );
     }
 
-    /// "API" que responde 200 ao `/me` com o corpo dado e conta os pedidos.
+    /// "API" que responde 200 com o corpo dado a qualquer pedido (o `/me`).
     fn me_api(body: &'static str) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -1168,12 +1168,8 @@ mod tests {
                 let _ = s.read(&mut buf);
                 let _ = write!(
                     s,
-                    "HTTP/1.1 200 OK
-Content-Type: application/json
-Content-Length: {}
-Connection: close
-
-{body}",
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                     Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
                     body.len()
                 );
             }
@@ -1289,5 +1285,66 @@ Connection: close
             alva.store().mirror_get().await.unwrap().unwrap().card,
             st.card
         );
+    }
+
+    /// O espelho de quem conectou na primeira peça: sem cartão.
+    const PIECE_1_MIRROR: &str = r#"{"id":"alva_1","username":"toy","avatar_url":"https://cdn.alvanista.com/a/toy.png","hero_url":null,"bio":"oi","profile_url":"https://www.alvanista.com/users/toy","fetched_at":7}"#;
+
+    /// Uma sessão da primeira peça, como está no banco de quem já conectou:
+    /// marcador, par e espelho sem cartão, e nenhuma chave `connected_at`.
+    async fn piece_1_session(api: String) -> Alvanista {
+        let (store, _, db) = store_and_db(MemSecrets::default()).await;
+        let alva = Alvanista::new(Client::with_api(api, store));
+        alva.store().save_tokens(&tokens("p1")).await.unwrap();
+        mark_session(&db).await;
+        put_raw_mirror(&db, PIECE_1_MIRROR).await;
+        alva
+    }
+
+    #[tokio::test]
+    async fn a_piece_1_session_reads_with_its_identity_and_no_card_or_connect_time() {
+        let _serial = SERIAL.lock().await;
+        // Sem rede: o guardado e o status leem o espelho da primeira peça.
+        let alva = piece_1_session("http://127.0.0.1:9".into()).await;
+        let cached = alva.cached_status().await;
+        let offline = alva.status().await;
+        assert!(offline.offline, "{offline:?}");
+        for st in [&cached, &offline] {
+            assert!(st.connected && !st.ended, "{st:?}");
+            assert_eq!(st.username.as_deref(), Some("toy"));
+            assert_eq!(
+                st.avatar_url.as_deref(),
+                Some("https://cdn.alvanista.com/a/toy.png")
+            );
+            assert_eq!(st.bio.as_deref(), Some("oi"));
+            assert_eq!(st.fetched_at, Some(7));
+            assert_eq!(st.card, None);
+            assert_eq!(st.connected_at, None);
+        }
+        // Com rede e um `/me` sem cartão: a identidade nova, e ainda nada de
+        // cartão nem de data da conexão.
+        let alva = piece_1_session(me_api(ME_WITHOUT_CARD)).await;
+        let online = alva.status().await;
+        assert!(online.connected && !online.offline, "{online:?}");
+        assert_eq!(online.username.as_deref(), Some("toy2"));
+        assert_eq!(online.card, None);
+        assert_eq!(online.connected_at, None);
+    }
+
+    #[tokio::test]
+    async fn a_stray_mirror_never_shows_under_a_new_session_whose_first_me_fails() {
+        let _serial = SERIAL.lock().await;
+        // Porta fechada: o primeiro `/me` da conta nova não responde.
+        let alva = alva_against("http://127.0.0.1:9".into()).await;
+        let mut a = me_named("conta_a");
+        a.id = "A".into();
+        a.card = Some(serde_json::json!({"ledger": {"hours": 99}}));
+        alva.store().mirror_put(&a).await.unwrap();
+        alva.store().start_session(&tokens("n2")).await.unwrap();
+        for st in [alva.cached_status().await, alva.status().await] {
+            assert!(st.connected, "{st:?}");
+            assert_eq!(st.username, None);
+            assert_eq!(st.card, None);
+        }
     }
 }

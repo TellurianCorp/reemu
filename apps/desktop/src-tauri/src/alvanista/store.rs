@@ -246,24 +246,38 @@ impl Store {
     }
 
     /// Começa uma sessão nova (depois do `exchange`): sob `REFRESH_LOCK`,
-    /// esquece as rotações de qualquer sessão anterior, marca a sessão e grava
-    /// o par. É o caminho do fluxo de conectar.
+    /// esquece as rotações de qualquer sessão anterior, apaga o espelho que
+    /// tenha sobrado, marca a sessão, grava o par e anota quando a sessão
+    /// começou. É o caminho do fluxo de conectar.
     ///
     /// O marcador vem antes do par: se o app cair entre os dois, sobra um
     /// marcador sem sessão, que a próxima leitura apaga. Na ordem inversa
     /// sobraria uma sessão que ninguém lê.
+    ///
+    /// O espelho sai sem impedir a conexão: um que um `mirror_clear` falho
+    /// deixou para trás mostraria o nome e o cartão da conta anterior até o
+    /// primeiro `/me` desta responder. `connected_at` entra depois do par e
+    /// também nunca derruba a conexão: os tokens já foram emitidos, e parar
+    /// aqui deixaria no servidor uma concessão que o aparelho não guardou.
     pub async fn start_session(&self, tokens: &Tokens) -> Result<(), String> {
         let _one_at_a_time = REFRESH_LOCK.lock().await;
         forget_all_rotations();
+        if let Err(e) = self.mirror_clear().await {
+            log::warn!("alvanista: espelho anterior não apagado: {e}");
+        }
         self.repo
             .state_set(SESSION_KEY, "1")
             .await
             .map_err(|e| e.to_string())?;
-        self.repo
+        self.save_tokens(tokens).await?;
+        if let Err(e) = self
+            .repo
             .state_set(CONNECTED_AT_KEY, &now_secs().to_string())
             .await
-            .map_err(|e| e.to_string())?;
-        self.save_tokens(tokens).await
+        {
+            log::warn!("alvanista: data da conexão não gravada: {e}");
+        }
+        Ok(())
     }
 
     /// `true` se há sessão marcada. Só lê o SQLite.
@@ -276,16 +290,17 @@ impl Store {
     }
 
     /// A sessão acabou (desconectou, o servidor a encerrou, ou o marcador
-    /// ficou sem par): sai o marcador.
+    /// ficou sem par): sai o marcador e depois a data da conexão. A data não
+    /// sair só vai para o log: nunca pode deixar o marcador para trás.
     pub async fn unmark_session(&self) -> Result<(), String> {
-        self.repo
-            .state_delete(CONNECTED_AT_KEY)
-            .await
-            .map_err(|e| e.to_string())?;
         self.repo
             .state_delete(SESSION_KEY)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        if let Err(e) = self.repo.state_delete(CONNECTED_AT_KEY).await {
+            log::warn!("alvanista: data da conexão não apagada: {e}");
+        }
+        Ok(())
     }
 
     /// Quando a sessão começou, em segundos Unix. Só lê o SQLite; `None` se
@@ -511,6 +526,14 @@ pub(super) mod test_support {
     pub async fn mark_session(db: &db::Db) {
         AlvanistaRepo::new(db.clone())
             .state_set(SESSION_KEY, "1")
+            .await
+            .unwrap();
+    }
+
+    /// Grava o espelho cru, como um build anterior o deixou.
+    pub async fn put_raw_mirror(db: &db::Db, json: &str) {
+        AlvanistaRepo::new(db.clone())
+            .state_set(MIRROR_KEY, json)
             .await
             .unwrap();
     }
@@ -798,6 +821,29 @@ mod tests {
         assert!(at > 1_700_000_000, "{at}");
         store.unmark_session().await.unwrap();
         assert_eq!(store.connected_at().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn starting_a_session_drops_a_stray_mirror() {
+        let _serial = SERIAL.lock().await;
+        let (store, _) = store_with(MemSecrets::default()).await;
+        // O espelho da conta anterior, que um `mirror_clear` falho deixou.
+        store
+            .mirror_put(&Me {
+                id: "A".into(),
+                username: "a".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/users/a".into(),
+                card: Some(serde_json::json!({"ledger": {"hours": 99}})),
+            })
+            .await
+            .unwrap();
+        store.start_session(&tokens("n1")).await.unwrap();
+        assert_eq!(store.mirror_get().await.unwrap(), None);
+        assert!(store.has_session().await.unwrap());
+        assert!(store.connected_at().await.unwrap().is_some());
     }
 
     #[tokio::test]
