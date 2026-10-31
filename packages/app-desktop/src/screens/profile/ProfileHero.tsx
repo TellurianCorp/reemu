@@ -1,4 +1,4 @@
-import { Body1, Button, Caption1, Title1, makeStyles, tokens } from '@fluentui/react-components'
+import { Badge, Body1, Button, Caption1, Title1, makeStyles, tokens } from '@fluentui/react-components'
 import { ArrowClockwiseRegular } from '@fluentui/react-icons'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -50,7 +50,7 @@ const useStyles = makeStyles({
   name: { margin: 0, overflowWrap: 'anywhere' },
   bio: { color: tokens.colorNeutralForeground2, maxWidth: '640px', overflowWrap: 'anywhere' },
   muted: { color: tokens.colorNeutralForeground3 },
-  warn: { color: tokens.colorPaletteYellowForeground2 },
+  badge: { alignSelf: 'flex-start' },
   actions: { display: 'flex', flexDirection: 'column', rowGap: '8px', alignItems: 'stretch' },
   sync: {
     display: 'flex',
@@ -115,18 +115,19 @@ export function ProfileHero({
             !connected && <Body1 className={s.muted}>{t('profilePage.noBio')}</Body1>
           )}
           {!connected && <Caption1 className={s.muted}>{t('profilePage.localMeta')}</Caption1>}
-          {connected && status?.offline && <Caption1 className={s.warn}>{t('alvanista.offlineBadge')}</Caption1>}
-          {connected && status?.insecure_storage && (
-            <Caption1 className={s.warn}>{t('alvanista.insecureStorage')}</Caption1>
+          {connected && status?.offline && (
+            <Badge appearance="tint" color="warning" className={s.badge}>
+              {t('alvanista.offlineBadge')}
+            </Badge>
           )}
         </div>
         <div className={s.actions}>
           {connected ? (
             <>
-              <Button appearance="primary" onClick={() => void alvanistaOpenProfile()}>
+              <Button appearance="primary" onClick={() => void alvanistaOpenProfile().catch(() => {})}>
                 {t('profilePage.viewOnAlvanista')}
               </Button>
-              <Button appearance="outline" onClick={() => void alvanistaOpenSite('edit')}>
+              <Button appearance="outline" onClick={() => void alvanistaOpenSite('edit').catch(() => {})}>
                 {t('alvanista.editOnAlvanista')}
               </Button>
               <div className={s.sync}>

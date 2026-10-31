@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useToastStore } from '../stores/useToastStore'
 import type { AlvanistaStatus, RecentSaveState, RomEntry } from '../lib/tauri'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -111,6 +112,7 @@ beforeEach(() => {
   api.alvanistaCachedStatus.mockResolvedValue(OFF)
   api.alvanistaOpenProfile.mockResolvedValue(undefined)
   api.alvanistaOpenSite.mockResolvedValue(undefined)
+  useToastStore.setState({ queue: [] })
 })
 afterEach(async () => {
   await unmount()
@@ -236,7 +238,7 @@ describe('ProfilePage', () => {
     api.alvanistaStatus.mockResolvedValue(st)
     await mount()
     expect(host.textContent).toContain('Sem conexão: mostrando o último perfil salvo')
-    expect(host.textContent).toContain('O chaveiro do sistema não está disponível')
+    expect(host.textContent).not.toContain('O chaveiro do sistema não está disponível')
     expect(host.textContent).toContain('toy')
   })
 
@@ -251,5 +253,39 @@ describe('ProfilePage', () => {
     await act(async () => refresh().click())
     await settle()
     expect(api.alvanistaStatus.mock.calls.length).toBe(before + 1)
+  })
+
+  it('the full status with another identity replaces the cached one in the hero', async () => {
+    api.alvanistaCachedStatus.mockResolvedValueOnce(ON)
+    const next = { ...ON, username: 'novo', bio: 'nova bio' }
+    api.alvanistaCachedStatus.mockResolvedValue(next)
+    api.alvanistaStatus.mockResolvedValue(next)
+    await mount()
+    expect(host.textContent).toContain('novo')
+    expect(host.textContent).toContain('nova bio')
+    expect(host.textContent).not.toContain('bio do Alvanista')
+  })
+
+  it('ended: falls back to the local profile and pushes the ended toast', async () => {
+    api.alvanistaCachedStatus.mockResolvedValueOnce(ON)
+    api.alvanistaCachedStatus.mockResolvedValue(OFF)
+    api.alvanistaStatus.mockResolvedValue({ ...OFF, ended: true })
+    await mount()
+    expect(host.textContent).toContain('Local')
+    expect(byText('Ver no Alvanista')).toBeUndefined()
+    const messages = useToastStore.getState().queue.map((x) => x.message)
+    expect(messages).toContain('Conexão com o Alvanista encerrada')
+  })
+
+  it('recent shows play time and relative date under the cover', async () => {
+    const now = Math.floor(Date.now() / 1000)
+    api.listRoms.mockResolvedValue([
+      rom('a', { title: 'Kuon', lastPlayedAt: now - 3 * 86400, playTimeSecs: 3600 }),
+      rom('b', { title: 'Zero', lastPlayedAt: now - 5 * 86400, playTimeSecs: 0 }),
+    ])
+    await mount()
+    const lines = [...section('profile-recent')!.querySelectorAll('[data-caption]')].map((e) => e.textContent)
+    expect(lines[0]).toBe('1 h · há 3 dias')
+    expect(lines[1]).toBe('há 5 dias')
   })
 })
