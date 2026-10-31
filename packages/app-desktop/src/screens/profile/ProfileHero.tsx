@@ -3,9 +3,11 @@ import { ArrowClockwiseRegular } from '@fluentui/react-icons'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import symbol from '../../assets/alvanista-symbol.svg'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import type { EffectiveProfile } from '../../hooks/useEffectiveProfile'
 import { alvanistaOpenProfile, alvanistaOpenSite, type AlvanistaStatus } from '../../lib/tauri'
+import { pickText, readableInk } from './profileData'
 import { relativeAge } from './relativeAge'
 
 const BANNER_H = 210
@@ -51,6 +53,26 @@ const useStyles = makeStyles({
   bio: { color: tokens.colorNeutralForeground2, maxWidth: '640px', overflowWrap: 'anywhere' },
   muted: { color: tokens.colorNeutralForeground3 },
   badge: { alignSelf: 'flex-start' },
+  chips: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    padding: '3px 10px',
+    borderRadius: tokens.borderRadiusCircular,
+    fontSize: '12px',
+    fontWeight: tokens.fontWeightSemibold,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  chipSymbol: { width: '14px', height: '14px' },
+  meta: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    columnGap: '14px',
+    color: tokens.colorNeutralForeground3,
+  },
   actions: { display: 'flex', flexDirection: 'column', rowGap: '8px', alignItems: 'stretch' },
   sync: {
     display: 'flex',
@@ -96,6 +118,12 @@ export function ProfileHero({
       }
     : undefined
   const fetchedAt = connected ? status?.fetched_at : null
+  const card = connected ? status?.card : null
+  const tierName = pickText(identity?.tier?.name, i18n.language)
+  const reino = pickText(card?.reino_title_text, i18n.language)
+  const palette = card?.palette
+  const memberYear = card?.member_since != null ? new Date(card.member_since * 1000).getFullYear() : null
+  const location = identity?.location || null
 
   return (
     <section className={s.hero} data-testid="profile-hero">
@@ -108,11 +136,45 @@ export function ProfileHero({
           <Title1 as="h1" className={s.name}>
             {profile.name}
           </Title1>
+          {card && (
+            <div className={s.chips} data-testid="profile-chips">
+              {identity?.level != null && (
+                <span className={s.chip} data-chip="level">
+                  {t('profilePage.chipLevel', { level: identity.level })}
+                </span>
+              )}
+              {tierName && (
+                <span
+                  className={s.chip}
+                  data-chip="tier"
+                  // A paleta só tinge este chip; a tinta é a de melhor contraste sobre o tom.
+                  style={palette?.mid ? { backgroundColor: palette.mid, color: readableInk(palette.mid), borderColor: palette.mid } : undefined}
+                >
+                  {tierName}
+                </span>
+              )}
+              {reino && (
+                <span className={s.chip} data-chip="reino">
+                  {reino}
+                </span>
+              )}
+              <span className={s.chip} data-chip="alvanista">
+                <img className={s.chipSymbol} src={symbol} alt="" aria-hidden draggable={false} />
+                Alvanista
+              </span>
+            </div>
+          )}
           {/* Conectado sem bio no Alvanista: nenhuma, nunca a local. */}
           {profile.bio ? (
             <Body1 className={s.bio}>{profile.bio}</Body1>
           ) : (
             !connected && <Body1 className={s.muted}>{t('profilePage.noBio')}</Body1>
+          )}
+          {(location || memberYear != null) && connected && (
+            <Caption1 className={s.meta} data-testid="profile-meta">
+              {location && <span>{location}</span>}
+              {memberYear != null && <span>{t('profilePage.memberSince', { year: memberYear })}</span>}
+            </Caption1>
           )}
           {!connected && <Caption1 className={s.muted}>{t('profilePage.localMeta')}</Caption1>}
           {connected && status?.offline && (

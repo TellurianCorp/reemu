@@ -11,7 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlvanistaButton } from '../../components/AlvanistaButton'
 import { LoadingState } from '../../components/EmptyState'
@@ -24,11 +24,9 @@ import {
   useAlvanistaStatusSync,
 } from '../../hooks/useAlvanistaStatusSync'
 import { sysToast } from '../../lib/toast'
+import { useAlvanistaConnect, useAlvanistaDisconnect } from '../../hooks/useAlvanistaConnect'
 import {
   alvanistaCachedStatus,
-  alvanistaCancel,
-  alvanistaConnect,
-  alvanistaDisconnect,
   alvanistaOpenProfile,
   alvanistaStatus,
   getProfile,
@@ -48,18 +46,6 @@ const useStyles = makeStyles({
   actions: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
 })
 
-const KEY = ALVANISTA_STATUS_KEY
-
-/** Códigos que o `alvanista_connect` devolve ao falhar. */
-const OUTCOMES = ['denied', 'timeout', 'offline', 'failed'] as const
-type Outcome = (typeof OUTCOMES)[number]
-
-function outcomeOf(err: unknown): Outcome | 'cancelled' {
-  const code = typeof err === 'string' ? err : err instanceof Error ? err.message : ''
-  if (code === 'cancelled') return 'cancelled'
-  return (OUTCOMES as readonly string[]).includes(code) ? (code as Outcome) : 'failed'
-}
-
 /**
  * Configurações › Perfil. Sem conexão, edita o perfil local (o mesmo do
  * onboarding) e oferece "Entrar com Alvanista". Conectado, mostra nome e
@@ -67,7 +53,7 @@ function outcomeOf(err: unknown): Outcome | 'cancelled' {
  * desconectar.
  */
 export function SettingsProfile() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
@@ -79,79 +65,13 @@ export function SettingsProfile() {
     queryFn: alvanistaCachedStatus,
     retry: false,
   })
-  const alva = useQuery({ queryKey: KEY, queryFn: alvanistaStatus, retry: false })
-  const [connecting, setConnecting] = useState(false)
-  const [disconnecting, setDisconnecting] = useState(false)
-  const disconnectingRef = useRef(false)
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
-  // Só o resultado da tentativa mais recente conta (cancelar e tentar de
-  // novo deixa a antiga rejeitando "cancelled" depois).
-  const attempt = useRef(0)
-  // Síncrono: um segundo clique antes do re-render não abre outra tentativa.
-  const connectingRef = useRef(false)
+  const alva = useQuery({ queryKey: ALVANISTA_STATUS_KEY, queryFn: alvanistaStatus, retry: false })
+  const { connect, cancel, connecting, outcome } = useAlvanistaConnect()
+  const { disconnect, disconnecting } = useAlvanistaDisconnect()
 
   const status = alva.data ?? cached.data ?? DISCONNECTED
 
   useAlvanistaStatusSync(status, alva.data, cached.data)
-
-  // Sair da tela com uma conexão em andamento a cancela: nenhuma tentativa
-  // termina sem ninguém olhando.
-  useEffect(
-    () => () => {
-      if (connectingRef.current) {
-        attempt.current++
-        void alvanistaCancel().catch(() => {})
-      }
-    },
-    [],
-  )
-
-  const connect = useCallback(() => {
-    if (connectingRef.current) return
-    connectingRef.current = true
-    const mine = ++attempt.current
-    setOutcome(null)
-    setConnecting(true)
-    alvanistaConnect(i18n.language)
-      .then((next) => {
-        if (mine !== attempt.current) return
-        connectingRef.current = false
-        void qc.cancelQueries({ queryKey: KEY })
-        qc.setQueryData(KEY, next)
-        setConnecting(false)
-      })
-      .catch((err: unknown) => {
-        if (mine !== attempt.current) return
-        connectingRef.current = false
-        const out = outcomeOf(err)
-        setConnecting(false)
-        setOutcome(out === 'cancelled' ? null : out)
-      })
-  }, [i18n.language, qc])
-
-  const cancel = useCallback(() => {
-    void alvanistaCancel().catch(() => {})
-  }, [])
-
-  const disconnect = useCallback(async () => {
-    // Síncrono, como no conectar: um segundo clique não desconecta de novo
-    // (nem mostra um segundo aviso).
-    if (disconnectingRef.current) return
-    disconnectingRef.current = true
-    setDisconnecting(true)
-    try {
-      await alvanistaDisconnect()
-      // Um status em voo ainda veria a sessão antiga: descarta.
-      await qc.cancelQueries({ queryKey: KEY })
-      qc.setQueryData(KEY, DISCONNECTED)
-      push(sysToast(t('alvanista.disconnected'), 'Success'))
-    } catch {
-      push(sysToast(t('alvanista.disconnectFailed'), 'Error'))
-    } finally {
-      disconnectingRef.current = false
-      setDisconnecting(false)
-    }
-  }, [push, qc, t])
 
   const openProfile = useCallback(() => {
     void alvanistaOpenProfile().catch(() => {})
