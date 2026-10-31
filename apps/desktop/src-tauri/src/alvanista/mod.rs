@@ -46,10 +46,29 @@ pub struct AlvanistaStatus {
     pub insecure_storage: bool,
     /// A conexão acabou (revogada no site, por exemplo); os tokens já saíram.
     pub ended: bool,
+    /// O cartão do perfil, como o `/me` o mandou (ou o último guardado).
+    pub card: Option<serde_json::Value>,
+    /// Quando o espelho foi lido do Alvanista pela última vez (segundos Unix).
+    pub fetched_at: Option<i64>,
+    /// Quando esta conexão começou (segundos Unix); `None` em sessões
+    /// anteriores à data.
+    pub connected_at: Option<i64>,
+    /// O rótulo deste aparelho no Alvanista, quando conectado.
+    pub device_label: Option<String>,
+}
+
+/// O rótulo do aparelho, só com a conexão de pé.
+fn device_label_if(connected: bool) -> Option<String> {
+    connected.then(|| config::device_label().to_owned())
 }
 
 impl AlvanistaStatus {
-    fn from_mirror(m: Mirror, offline: bool, insecure_storage: bool) -> Self {
+    fn from_mirror(
+        m: Mirror,
+        offline: bool,
+        insecure_storage: bool,
+        connected_at: Option<i64>,
+    ) -> Self {
         Self {
             connected: true,
             username: Some(m.username),
@@ -60,6 +79,10 @@ impl AlvanistaStatus {
             offline,
             insecure_storage,
             ended: false,
+            card: m.card,
+            fetched_at: Some(m.fetched_at),
+            connected_at,
+            device_label: device_label_if(true),
         }
     }
 }
@@ -211,22 +234,41 @@ impl Alvanista {
     pub async fn cached_status(&self) -> AlvanistaStatus {
         let mirror = self.store().mirror_get().await.ok().flatten();
         match self.stored_session().await {
-            Ok(Some(session)) => match mirror {
-                Some(m) => AlvanistaStatus::from_mirror(m, false, session.from_fallback),
-                None => AlvanistaStatus {
-                    connected: true,
-                    insecure_storage: session.from_fallback,
-                    ..Default::default()
-                },
-            },
+            Ok(Some(session)) => {
+                let connected_at = self.connected_at().await;
+                match mirror {
+                    Some(m) => {
+                        AlvanistaStatus::from_mirror(m, false, session.from_fallback, connected_at)
+                    }
+                    None => AlvanistaStatus {
+                        connected: true,
+                        insecure_storage: session.from_fallback,
+                        connected_at,
+                        device_label: device_label_if(true),
+                        ..Default::default()
+                    },
+                }
+            }
             Ok(None) => AlvanistaStatus::default(),
             Err(e) => {
                 log::warn!("alvanista: não leu a sessão: {e}");
                 // Sem leitura não se sabe onde a sessão está: só o espelho.
                 match mirror {
-                    Some(m) => AlvanistaStatus::from_mirror(m, true, false),
+                    Some(m) => AlvanistaStatus::from_mirror(m, true, false, None),
                     None => AlvanistaStatus::default(),
                 }
+            }
+        }
+    }
+
+    /// A data da conexão, só para quem já tem sessão. Falha de leitura vale
+    /// como "sem data".
+    async fn connected_at(&self) -> Option<i64> {
+        match self.store().connected_at().await {
+            Ok(at) => at,
+            Err(e) => {
+                log::warn!("alvanista: não leu a data da conexão: {e}");
+                None
             }
         }
     }
@@ -256,16 +298,22 @@ impl Alvanista {
                 // houver, segue na tela como offline.
                 log::warn!("alvanista: não leu a sessão: {e}");
                 return match mirror {
-                    Some(m) => AlvanistaStatus::from_mirror(m, true, false),
+                    Some(m) => AlvanistaStatus::from_mirror(m, true, false, None),
                     None => AlvanistaStatus::default(),
                 };
             }
         };
         let insecure = session.from_fallback;
         let mut tokens = session.tokens.clone();
+        let connected_at = self.connected_at().await;
         match self.client.me(&mut tokens).await {
             Ok(me) => AlvanistaStatus {
                 connected: true,
+                // Sem cartão no `/me`, fica o último guardado.
+                card: me.card.or(mirror.and_then(|m| m.card)),
+                fetched_at: Some(store::now_secs()),
+                connected_at,
+                device_label: device_label_if(true),
                 username: Some(me.username),
                 avatar_url: me.avatar_url,
                 hero_url: me.hero_url,
@@ -293,11 +341,13 @@ impl Alvanista {
             Err(e) => {
                 log::info!("alvanista: sem resposta, usando o espelho: {e}");
                 match mirror {
-                    Some(m) => AlvanistaStatus::from_mirror(m, true, insecure),
+                    Some(m) => AlvanistaStatus::from_mirror(m, true, insecure, connected_at),
                     None => AlvanistaStatus {
                         connected: true,
                         offline: true,
                         insecure_storage: insecure,
+                        connected_at,
+                        device_label: device_label_if(true),
                         ..Default::default()
                     },
                 }
@@ -492,6 +542,27 @@ pub async fn alvanista_open_profile(app: AppHandle) -> Result<(), String> {
     })
 }
 
+/// A URL de uma das duas páginas do Alvanista que o ReEmu sabe abrir.
+/// Qualquer outro nome é recusado: a tela escolhe a página, nunca a URL.
+fn site_page_url(page: &str) -> Option<String> {
+    let path = match page {
+        "edit" => "/settings/profile",
+        "apps" => "/settings/apps",
+        _ => return None,
+    };
+    Some(format!("{}{path}", config::base_urls().0))
+}
+
+/// Abre "editar perfil" ou "apps conectados" no navegador do sistema.
+#[tauri::command]
+pub async fn alvanista_open_site(page: String) -> Result<(), String> {
+    let url = site_page_url(&page).ok_or_else(|| "failed".to_owned())?;
+    open_in_browser(&url).map_err(|e| {
+        log::warn!("alvanista: não abriu a página do site: {e}");
+        "failed".to_owned()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::store::test_support::*;
@@ -666,6 +737,7 @@ mod tests {
                 hero_url: None,
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
+                card: None,
             })
             .await
             .unwrap();
@@ -714,6 +786,7 @@ mod tests {
                 hero_url: None,
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
+                card: None,
             })
             .await
             .unwrap();
@@ -732,6 +805,7 @@ mod tests {
             hero_url: None,
             bio: None,
             profile_url: format!("https://www.alvanista.com/users/{username}"),
+            card: None,
         }
     }
 
@@ -871,6 +945,7 @@ mod tests {
                 hero_url: None,
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
+                card: None,
             })
             .await
             .unwrap();
@@ -901,6 +976,7 @@ mod tests {
         assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
         assert_eq!(alva.status().await, AlvanistaStatus::default());
         assert_eq!(alva.refresh_if_connected().await, None);
+        assert_eq!(alva.store().connected_at().await, Ok(None));
         assert_eq!(alva.disconnect().await, Ok(()));
         assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
 
@@ -1058,6 +1134,7 @@ mod tests {
             hero_url: None,
             bio: None,
             profile_url: url.into(),
+            card: None,
         };
         alva.store()
             .mirror_put(&put("https://evil.example/users/u"))
@@ -1072,5 +1149,111 @@ mod tests {
             alva.profile_url().await.as_deref(),
             Some("https://www.alvanista.com/users/u")
         );
+    }
+
+    /// "API" que responde 200 ao `/me` com o corpo dado e conta os pedidos.
+    fn me_api(body: &'static str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let until = std::time::Instant::now() + Duration::from_secs(20);
+            while std::time::Instant::now() < until {
+                let Ok((mut s, _)) = listener.accept() else {
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                };
+                let _ = s.set_nonblocking(false);
+                let mut buf = [0u8; 4096];
+                let _ = s.read(&mut buf);
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: {}
+Connection: close
+
+{body}",
+                    body.len()
+                );
+            }
+        });
+        base
+    }
+
+    const ME_WITH_CARD: &str = r#"{"id":"alva_1","username":"toy","profile_url":"https://www.alvanista.com/users/toy","card":{"ledger":{"hours":42},"badges":{"count":3,"recent":[]}}}"#;
+    const ME_WITHOUT_CARD: &str =
+        r#"{"id":"alva_1","username":"toy2","profile_url":"https://www.alvanista.com/users/toy2"}"#;
+
+    #[tokio::test]
+    async fn status_carries_the_card_fetch_time_and_device_label() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against(me_api(ME_WITH_CARD)).await;
+        alva.store().start_session(&tokens("k1")).await.unwrap();
+        let st = alva.status().await;
+        assert!(st.connected && !st.offline, "{st:?}");
+        assert_eq!(
+            st.card,
+            Some(serde_json::json!({"ledger":{"hours":42},"badges":{"count":3,"recent":[]}}))
+        );
+        assert!(st.fetched_at.unwrap() > 1_700_000_000);
+        assert!(st.connected_at.unwrap() > 1_700_000_000);
+        assert_eq!(st.device_label.as_deref(), Some(config::device_label()));
+        // O cache local traz o mesmo cartão e o rótulo, sem rede.
+        let cached = alva.cached_status().await;
+        assert_eq!(cached.card, st.card);
+        assert_eq!(cached.connected_at, st.connected_at);
+        assert_eq!(cached.device_label, st.device_label);
+        assert!(cached.fetched_at.is_some());
+        // Sem token na saída.
+        let json = serde_json::to_string(&st).unwrap();
+        assert!(!json.contains("alp_") && !json.contains("alr_"));
+    }
+
+    #[tokio::test]
+    async fn status_keeps_the_stored_card_when_me_sends_none() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against(me_api(ME_WITHOUT_CARD)).await;
+        alva.store().start_session(&tokens("k2")).await.unwrap();
+        let mut me = me_named("toy");
+        me.card = Some(serde_json::json!({"ledger":{"hours":5}}));
+        alva.store().mirror_put(&me).await.unwrap();
+        let st = alva.status().await;
+        assert_eq!(st.username.as_deref(), Some("toy2"));
+        assert_eq!(st.card, Some(serde_json::json!({"ledger":{"hours":5}})));
+        assert_eq!(
+            alva.store().mirror_get().await.unwrap().unwrap().card,
+            st.card
+        );
+    }
+
+    #[tokio::test]
+    async fn disconnected_status_has_no_card_connect_time_or_label() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against("http://127.0.0.1:9".into()).await;
+        alva.store().start_session(&tokens("k3")).await.unwrap();
+        let mut me = me_named("toy");
+        me.card = Some(serde_json::json!({"ledger":{"hours":5}}));
+        alva.store().mirror_put(&me).await.unwrap();
+        assert_eq!(alva.disconnect().await, Ok(()));
+        assert_eq!(alva.store().connected_at().await, Ok(None));
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert_eq!(alva.store().mirror_get().await.unwrap(), None);
+    }
+
+    #[test]
+    fn open_site_refuses_unknown_pages() {
+        let site = config::base_urls().0;
+        assert_eq!(
+            site_page_url("edit"),
+            Some(format!("{site}/settings/profile"))
+        );
+        assert_eq!(site_page_url("apps"), Some(format!("{site}/settings/apps")));
+        for bad in ["", "Edit", "https://evil.example/", "../x", "profile"] {
+            assert_eq!(site_page_url(bad), None, "{bad}");
+        }
+        for page in ["edit", "apps"] {
+            assert!(is_site_url(&site_page_url(page).unwrap()));
+        }
     }
 }

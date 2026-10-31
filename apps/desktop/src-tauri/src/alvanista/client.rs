@@ -48,6 +48,10 @@ pub struct Me {
     #[serde(default)]
     pub bio: Option<String>,
     pub profile_url: String,
+    /// O cartão do perfil, como o servidor mandou (todo campo é opcional).
+    /// Ausente e `null` leem igual: `None`.
+    #[serde(default)]
+    pub card: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
