@@ -1,4 +1,5 @@
 import { Button, MessageBar, MessageBarBody, Spinner, makeStyles, tokens } from '@fluentui/react-components'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import symbol from '../../assets/alvanista-symbol.svg'
 import { AlvanistaButton } from '../../components/AlvanistaButton'
@@ -50,6 +51,17 @@ const useStyles = makeStyles({
   waiting: { display: 'flex', alignItems: 'center', columnGap: '12px', flexWrap: 'wrap' },
   warn: { marginTop: '10px' },
 })
+
+/** Ícone de badge; se a imagem não carrega, some em vez de mostrar o ícone quebrado. */
+function BadgeIcon({ badge, className }: { badge: NonNullable<AlvanistaCard['badges']>['recent'][number]; className: string }) {
+  const { i18n } = useTranslation()
+  const [broken, setBroken] = useState(false)
+  if (broken) return null
+  const name = pickText(badge.names, i18n.language) ?? badge.name
+  return (
+    <img className={className} src={badge.icon_url} alt={name} title={name} loading="lazy" onError={() => setBroken(true)} />
+  )
+}
 
 /** "No Alvanista": o que o cartão trouxe; cada linha some quando o dado falta. */
 export function AlvanistaCardBlock({ card }: { card: AlvanistaCard }) {
@@ -116,10 +128,9 @@ export function AlvanistaCardBlock({ card }: { card: AlvanistaCard }) {
       )}
       {(recent.length > 0 || total > 0) && (
         <div className={s.badges} data-testid="profile-alvanista-badges">
-          {recent.map((b) => {
-            const name = pickText(b.names, i18n.language) ?? b.name
-            return <img key={b.icon_url} className={s.badge} src={b.icon_url} alt={name} title={name} loading="lazy" />
-          })}
+          {recent.map((b, i) => (
+            <BadgeIcon key={`${b.name}-${i}`} badge={b} className={s.badge} />
+          ))}
           {total > 0 && <span className={s.more}>{t('profilePage.alvaBadges', { count: total })}</span>}
         </div>
       )}

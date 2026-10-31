@@ -696,6 +696,7 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
 
 /** O cartão do perfil, como o servidor o manda: todo campo é opcional. */
 export interface AlvanistaCard {
+  /** O ano em que a conta começou (2010), não um instante Unix. */
   member_since?: number
   identity?: {
     location?: string

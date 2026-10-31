@@ -864,7 +864,7 @@ const en: Messages = {
     connTitle: 'Connection with Alvanista',
     connAccount: 'Account',
     connSees: 'ReEmu sees',
-    connSeesValue: 'your profile (name, avatar, cover and bio) and the Alvanista card: level, collection, trophies, badges and what you are playing now',
+    connSeesValue: 'your profile (name, avatar, cover, bio, location and member since); level, tier and Reino title; collection, platforms, trophies, hours, finished games, check-ins, gamers and badges; how many posts, articles, reviews and communities; what you are playing now',
     connDevice: 'This device',
     connSince: 'connected since {{date}}',
     connSession: 'Session',

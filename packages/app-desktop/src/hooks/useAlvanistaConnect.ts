@@ -55,6 +55,9 @@ export function useAlvanistaConnect() {
         connectingRef.current = false
         void qc.cancelQueries({ queryKey: ALVANISTA_STATUS_KEY })
         qc.setQueryData(ALVANISTA_STATUS_KEY, next)
+        // O topo e o corpo leem estados diferentes: os dois mudam juntos.
+        qc.setQueryData(ALVANISTA_CACHED_KEY, next)
+        void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
         setConnecting(false)
       })
       .catch((err: unknown) => {
@@ -92,6 +95,8 @@ export function useAlvanistaDisconnect() {
       // Um status em voo ainda veria a sessão antiga: descarta.
       await qc.cancelQueries({ queryKey: ALVANISTA_STATUS_KEY })
       qc.setQueryData(ALVANISTA_STATUS_KEY, DISCONNECTED)
+      await qc.cancelQueries({ queryKey: ALVANISTA_CACHED_KEY })
+      qc.setQueryData(ALVANISTA_CACHED_KEY, DISCONNECTED)
       void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
       push(sysToast(t('alvanista.disconnected'), 'Success'))
     } catch {

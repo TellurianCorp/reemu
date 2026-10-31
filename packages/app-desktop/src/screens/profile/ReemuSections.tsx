@@ -46,7 +46,7 @@ const useStyles = makeStyles({
   bars: { display: 'flex', flexDirection: 'column', rowGap: '10px' },
   bar: {
     display: 'grid',
-    gridTemplateColumns: '36px minmax(0, 1fr) auto',
+    gridTemplateColumns: '36px minmax(0, 1fr) 72px',
     columnGap: '10px',
     alignItems: 'center',
     width: '100%',
@@ -86,6 +86,8 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     fontSize: '12.5px',
     fontVariantNumeric: 'tabular-nums',
+    textAlign: 'right',
+    whiteSpace: 'nowrap',
   },
 })
 

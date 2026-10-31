@@ -75,7 +75,8 @@ export function ProfilePage() {
         {connected ? (
           status?.card ? <AlvanistaCardBlock card={status.card} /> : null
         ) : (
-          <AlvanistaInvite />
+          // Sem banco o Alvanista não tem onde guardar a sessão: sem convite.
+          !cached.isError && <AlvanistaInvite />
         )}
       </div>
       <MomentsRow states={saves.data ?? []} />
