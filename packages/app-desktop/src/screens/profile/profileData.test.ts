@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { RomEntry } from '../../lib/tauri'
+import { contrastRatio } from '../../styles/themes'
 import {
+  CAPTION_SCRIM,
   cardComputedAt,
   cardLag,
   hasCardContent,
+  isHexColor,
   mostPlayed,
+  networkLabel,
   pickText,
   playingNow,
   profileStats,
@@ -66,6 +70,29 @@ describe('readableInk', () => {
   })
 })
 
+describe('isHexColor', () => {
+  it('só #rrggbb', () => {
+    expect(isHexColor('#E0B84A')).toBe(true)
+    expect(isHexColor('#abc')).toBe(false)
+    expect(isHexColor('gold')).toBe(false)
+    expect(isHexColor(undefined)).toBe(false)
+  })
+})
+
+describe('networkLabel', () => {
+  it('dá nome às redes do servidor e deixa a desconhecida como veio', () => {
+    expect(['psn', 'xbox', 'steam', 'gog', 'retroachievements', 'epic'].map(networkLabel)).toEqual([
+      'PlayStation',
+      'Xbox',
+      'Steam',
+      'GOG',
+      'RetroAchievements',
+      'Epic',
+    ])
+    expect(networkLabel('nova')).toBe('nova')
+  })
+})
+
 describe('idade do cartão', () => {
   const at = Date.UTC(2026, 9, 28, 12) / 1000
   const card = { computed_at: new Date(at * 1000).toISOString(), playing_now: { title: 'Kuon' } }
@@ -103,5 +130,15 @@ describe('hasCardContent', () => {
     const card = { computed_at: new Date(at * 1000).toISOString(), playing_now: { title: 'Kuon' } }
     expect(hasCardContent(card, at + 60)).toBe(true)
     expect(hasCardContent(card, at + 3 * 86400)).toBe(false)
+  })
+})
+
+describe('legenda de "Seus momentos"', () => {
+  it('texto branco sobre o véu, numa captura toda branca, fica em 4,5:1', () => {
+    // o ponto mais claro do véu: preto no topo sobre branco
+    const v = Math.round(255 * (1 - CAPTION_SCRIM.top))
+    const hex = `#${v.toString(16).padStart(2, '0').repeat(3)}`
+    expect(contrastRatio('#ffffff', hex)).toBeGreaterThanOrEqual(4.5)
+    expect(CAPTION_SCRIM.bottom).toBeGreaterThan(CAPTION_SCRIM.top)
   })
 })

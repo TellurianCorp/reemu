@@ -7,7 +7,7 @@ import symbol from '../../assets/alvanista-symbol.svg'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import type { EffectiveProfile } from '../../hooks/useEffectiveProfile'
 import { alvanistaOpenProfile, alvanistaOpenSite, type AlvanistaStatus } from '../../lib/tauri'
-import { pickText, readableInk } from './profileData'
+import { isHexColor, pickText, readableInk } from './profileData'
 import { relativeAge } from './relativeAge'
 
 const BANNER_H = 210
@@ -121,7 +121,9 @@ export function ProfileHero({
   const card = connected ? status?.card : null
   const tierName = pickText(identity?.tier?.name, i18n.language)
   const reino = pickText(card?.reino_title_text, i18n.language)
-  const palette = card?.palette
+  // Só uma cor `#rrggbb` tinge o chip do plano; outra fica no estilo padrão.
+  const mid = card?.palette?.mid
+  const tint = isHexColor(mid) ? mid : null
   const memberYear = card?.member_since != null && card.member_since >= 1900 ? card.member_since : null
   const location = identity?.location || null
 
@@ -148,7 +150,7 @@ export function ProfileHero({
                   className={s.chip}
                   data-chip="tier"
                   // A paleta só tinge este chip; a tinta é a de melhor contraste sobre o tom.
-                  style={palette?.mid ? { backgroundColor: palette.mid, color: readableInk(palette.mid), borderColor: palette.mid } : undefined}
+                  style={tint ? { backgroundColor: tint, color: readableInk(tint), borderColor: tint } : undefined}
                 >
                   {tierName}
                 </span>
@@ -160,7 +162,7 @@ export function ProfileHero({
               )}
               <span className={s.chip} data-chip="alvanista">
                 <img className={s.chipSymbol} src={symbol} alt="" aria-hidden draggable={false} />
-                Alvanista
+                {t('profilePage.chipAlvanista')}
               </span>
             </div>
           )}

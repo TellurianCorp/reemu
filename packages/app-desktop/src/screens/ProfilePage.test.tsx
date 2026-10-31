@@ -193,6 +193,13 @@ describe('ProfilePage', () => {
     expect(stat('favorites')).toBe('1')
   })
 
+  it('a library with no play time shows 0 min, not less than a minute', async () => {
+    api.listRoms.mockResolvedValue([rom('a'), rom('b')])
+    await mount()
+    const time = section('profile-numbers')!.querySelector('[data-stat="time"]')!.textContent
+    expect(time).toBe('0 min')
+  })
+
   it('an empty library shows the invitation line and hides the shelves', async () => {
     await mount()
     const s = section('profile-numbers')!
@@ -209,9 +216,14 @@ describe('ProfilePage', () => {
       rom('new', { title: 'Novo', lastPlayedAt: 900, playTimeSecs: 60 }),
     ])
     await mount()
-    const first = (id: string) => section(id)!.querySelector('button, [role="button"]')!.getAttribute('aria-label')
-    expect(first('profile-recent')).toBe('Novo')
-    expect(first('profile-most-played')).toBe('Antigo')
+    const first = (id: string) => section(id)!.querySelector('button, [role="button"]')!
+    expect(first('profile-recent').getAttribute('aria-label')).toBe('Novo')
+    // a linha de "Mais jogados" se nomeia pelo conteúdo: título e tempo, só spans
+    const row = first('profile-most-played')
+    expect(row.getAttribute('aria-label')).toBeNull()
+    expect(row.textContent).toContain('Antigo')
+    expect(row.textContent).toContain('2 h 30 min')
+    expect(section('profile-most-played')!.querySelector('button div')).toBeNull()
     await act(async () => (section('profile-recent')!.querySelector('button, [role="button"]') as HTMLElement).click())
     await settle()
     expect(document.body.textContent).toContain('tela do jogo')
@@ -353,7 +365,7 @@ describe('ProfilePage', () => {
       },
       reino_title_text: { pt: 'Conde de Lola', en: 'Count of Lola' },
       palette: { base: '#111111', mid: '#e0b84a', accent: '#ffffff', source: 'cover' },
-      proofs: { collection: { games: 2047, platforms: 44 }, trophies: { count: 3943, networks: ['PSN', 'Xbox'] } },
+      proofs: { collection: { games: 2047, platforms: 44 }, trophies: { count: 3943, networks: ['psn', 'xbox', 'nova-rede'] } },
       ledger: { hours: 614, finished: 23, checkins: 244, gamers: 173 },
       badges: {
         count: 27,
@@ -397,8 +409,11 @@ describe('ProfilePage', () => {
       expect(tile('collection')).toContain('2.047')
       expect(tile('collection')).toContain('44 plataformas')
       expect(tile('trophies')).toContain('3.943')
-      expect(tile('trophies')).toContain('PSN')
+      expect(tile('trophies')).toContain('PlayStation')
       expect(tile('trophies')).toContain('Xbox')
+      expect(tile('trophies')).not.toContain('psn')
+      // rede que o ReEmu não conhece: como veio
+      expect(tile('trophies')).toContain('nova-rede')
       expect(tile('hours')).toContain('614 h')
       expect(tile('finished')).toContain('23')
       expect(tile('checkins')).toContain('244')
@@ -592,6 +607,23 @@ describe('ProfilePage', () => {
       expect(chip.style.color).not.toBe('')
       const level = host.querySelector('[data-chip="level"]') as HTMLElement
       expect(level.style.color).toBe('')
+    })
+
+    it('a palette mid that is not #rrggbb leaves the tier chip in the default style', async () => {
+      connect({}, { ...FULL, palette: { base: '#111111', mid: 'gold', accent: '#ffffff', source: 'hero' } })
+      await mount()
+      const chip = host.querySelector('[data-chip="tier"]') as HTMLElement
+      expect(chip.textContent).toBe('Colecionador')
+      expect(chip.style.color).toBe('')
+      expect(chip.style.backgroundColor).toBe('')
+    })
+
+    it('one platform reads in the singular', async () => {
+      connect({}, { proofs: { collection: { games: 3, platforms: 1 } } })
+      await mount()
+      const tile = section('profile-alvanista')!.querySelector('[data-tile="collection"]')!.textContent!
+      expect(tile).toContain('1 plataforma')
+      expect(tile).not.toContain('plataformas')
     })
 
     it('the two-column row is not rendered empty, and a lone side takes the whole row', async () => {

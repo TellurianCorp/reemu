@@ -1,4 +1,5 @@
 import type { AlvanistaCard, RomEntry } from '../../lib/tauri'
+import { contrastRatio } from '../../styles/themes'
 
 /** Números locais do perfil. `games` conta toda a biblioteca. */
 export function profileStats(roms: RomEntry[]): {
@@ -41,22 +42,28 @@ export function pickText(map: Record<string, string> | undefined, lang: string):
   return Object.values(map).find((v) => !!v) ?? null
 }
 
-function luminance(hex: string): number {
-  const h = hex.replace('#', '')
-  const full = h.length === 3 ? [...h].map((c) => c + c).join('') : h
-  const [r, g, b] = [0, 2, 4].map((i) => {
-    const c = parseInt(full.slice(i, i + 2), 16) / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+/** Cor `#rrggbb`: a única que o chip do plano aceita para se tingir. */
+export function isHexColor(v: string | undefined): v is string {
+  return !!v && /^#[0-9a-f]{6}$/i.test(v)
 }
 
-/** Tinta (preto ou branco) com o maior contraste sobre `bg` (hex). */
+/** Tinta (preto ou branco) com o maior contraste sobre `bg` (`#rrggbb`). */
 export function readableInk(bg: string): '#000000' | '#ffffff' {
-  const l = luminance(bg)
-  const onBlack = (l + 0.05) / 0.05
-  const onWhite = 1.05 / (l + 0.05)
-  return onBlack >= onWhite ? '#000000' : '#ffffff'
+  return contrastRatio(bg, '#000000') >= contrastRatio(bg, '#ffffff') ? '#000000' : '#ffffff'
+}
+
+/** O nome de cada rede de troféus que o servidor manda; outra fica como veio. */
+const NETWORKS: Record<string, string> = {
+  psn: 'PlayStation',
+  xbox: 'Xbox',
+  steam: 'Steam',
+  gog: 'GOG',
+  retroachievements: 'RetroAchievements',
+  epic: 'Epic',
+}
+
+export function networkLabel(slug: string): string {
+  return NETWORKS[slug.toLowerCase()] ?? slug
 }
 
 /** A partir de quanto o cartão mais velho que a leitura mostra a própria idade (s). */
@@ -116,3 +123,7 @@ export function hasCardContent(card: AlvanistaCard, fetchedAt: number | null | u
     !!playingNow(card, fetchedAt)
   )
 }
+
+/** O véu preto sob a legenda branca de "Seus momentos" (opacidade no topo e
+ *  embaixo). O topo sozinho, sobre uma captura toda branca, já dá 4,5:1. */
+export const CAPTION_SCRIM = { top: 0.55, bottom: 0.85 } as const

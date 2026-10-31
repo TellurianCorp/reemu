@@ -12,6 +12,7 @@ import {
   cardLag,
   cardTiles,
   hasCardContent,
+  networkLabel,
   pickText,
   playingNow,
 } from './profileData'
@@ -99,7 +100,7 @@ export function AlvanistaCardBlock({ card, fetchedAt }: { card: AlvanistaCard; f
       case 'trophies':
         return { ...x, shown: num(x.value), label: t('profilePage.alvaTrophies') }
       case 'hours':
-        return { ...x, shown: `${num(x.value)} h`, label: t('profilePage.alvaHours') }
+        return { ...x, shown: t('profilePage.alvaHoursValue', { hours: num(x.value) }), label: t('profilePage.alvaHours') }
       case 'finished':
         return { ...x, shown: num(x.value), label: t('profilePage.alvaFinished') }
       case 'checkins':
@@ -136,7 +137,7 @@ export function AlvanistaCardBlock({ card, fetchedAt }: { card: AlvanistaCard; f
                 <div className={s.nets}>
                   {x.networks.map((n) => (
                     <span key={n} className={s.net}>
-                      {n}
+                      {networkLabel(n)}
                     </span>
                   ))}
                 </div>

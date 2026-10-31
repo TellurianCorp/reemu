@@ -5,6 +5,7 @@ import { SaveStateThumb } from '../../components/SaveStateThumb'
 import { SectionHeader } from '../../components/SectionHeader'
 import { formatPlayTime } from '../../lib/playTime'
 import type { RecentSaveState } from '../../lib/tauri'
+import { CAPTION_SCRIM } from './profileData'
 
 const useStyles = makeStyles({
   section: { marginTop: '26px' },
@@ -29,7 +30,10 @@ const useStyles = makeStyles({
     bottom: 0,
     padding: '18px 10px 7px',
     fontSize: '12px',
-    backgroundImage: 'linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.85))',
+    // Texto branco sobre qualquer captura, até as claras: o véu já começa
+    // escuro e a sombra separa as letras do que sobrar de claro atrás.
+    backgroundImage: `linear-gradient(180deg, rgba(0, 0, 0, ${CAPTION_SCRIM.top}), rgba(0, 0, 0, ${CAPTION_SCRIM.bottom}))`,
+    textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)',
   },
   capTitle: { display: 'block', fontSize: '12.5px', fontWeight: tokens.fontWeightSemibold },
 })
