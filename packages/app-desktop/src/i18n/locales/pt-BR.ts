@@ -874,6 +874,9 @@ const ptBR = {
     connManage: 'Gerenciar apps conectados no Alvanista',
     connBack: 'Ao desconectar volta o seu perfil local:',
     connBackNoBio: 'sem bio',
+    alvaCardAge: 'atualizado {{age}}',
+    defaultName: 'Jogador',
+    libraryError: 'Não foi possível ler a biblioteca.',
   },
   shaders: {
     extracting: 'Extraindo pacote de shaders…',
