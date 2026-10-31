@@ -22,7 +22,8 @@ impl SaveStateRepo {
         limit: u32,
     ) -> Result<Vec<SaveStateMetadata>, RepoError> {
         let rows = sqlx::query(&format!(
-            "{STATE_COLS} WHERE thumbnail_path IS NOT NULL              ORDER BY created_at DESC, id LIMIT ?1"
+            "{STATE_COLS} WHERE thumbnail_path IS NOT NULL \
+             ORDER BY created_at DESC, id LIMIT ?1"
         ))
         .bind(limit as i64)
         .fetch_all(&self.db)
