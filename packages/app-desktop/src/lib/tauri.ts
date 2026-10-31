@@ -642,6 +642,19 @@ export const saveState = (romId: string, slot: number | null) =>
 export const listSaveStates = (romId: string) =>
   invoke<SaveState[]>('list_save_states', { romId })
 
+/** Save state recente de qualquer jogo (`list_recent_save_states`); a miniatura
+ *  carrega por `SaveStateThumb` com `stateId`. */
+export interface RecentSaveState {
+  id: string
+  romId: string
+  romTitle: string
+  slot: number | null
+  createdAt: number
+  playTimeAtSave: number | null
+}
+export const listRecentSaveStates = (limit: number) =>
+  invoke<RecentSaveState[]>('list_recent_save_states', { limit })
+
 /** Cheat por código de um jogo (`commands/cheats.rs`, doc 17). */
 export interface Cheat {
   id: number
