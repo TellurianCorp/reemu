@@ -598,6 +598,14 @@ no `emu-session`, ver `docs/historico.md`).
         (2026-10-29). Conquistas pelo GAS e amigos vêm depois, quando o
         Alvanista abrir essas partes da API de parceiros; hero e logo de
         jogos seguem como no escopo acima.
+      - **Segunda peça (2026-10-31): página "Meu perfil" (`/perfil`)**,
+        feita no fork. Topo com a capa e os chips do card do Alvanista, "No
+        ReEmu", recentes e mais jogados, "No Alvanista" (some sem card),
+        momentos (save states com miniatura) e "Conexão com o Alvanista"
+        (aparelho, aviso do chaveiro, gerenciar apps, desconectar). Depende
+        do `card` no `/me`, em produção desde 2026-10-31. Detalhes em
+        `docs/historico.md` (2026-10-31). **Falta, para depois:** enviar
+        os dados de jogo (sessões e tempo) de volta ao Alvanista pelo GAS.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:
