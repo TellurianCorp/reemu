@@ -211,3 +211,29 @@ async fn recent_with_thumbnail_honours_limit() {
     assert_eq!(list.len(), 3);
     assert_eq!(list[0].id, "s4");
 }
+
+/// Estado cuja ROM saiu da biblioteca fica fora da lista, no próprio SQL.
+#[tokio::test]
+async fn recent_with_thumbnail_skips_a_state_whose_rom_is_gone() {
+    let db = mem_db().await;
+    seed_rom(&db, "rom1", "nes").await;
+    let repo = SaveStateRepo::new(db.clone());
+    repo.record_state(&state("ok", "rom1", "mesen", Some(0), 100))
+        .await
+        .unwrap();
+    // O pool in-memory tem uma conexão só, então o PRAGMA vale pra ela: com
+    // FK desligada o estado órfão entra (o cascade o apagaria).
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&db)
+        .await
+        .unwrap();
+    repo.record_state(&state("orfao", "removida", "mesen", Some(0), 200))
+        .await
+        .unwrap();
+
+    let list = repo.recent_with_thumbnail(10).await.unwrap();
+    assert_eq!(
+        list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["ok"]
+    );
+}
