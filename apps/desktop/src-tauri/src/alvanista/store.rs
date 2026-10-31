@@ -392,13 +392,21 @@ impl Store {
         Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()))
     }
 
-    /// Grava o espelho. Um `/me` sem cartão (servidor antigo, ou `card:
-    /// null`) atualiza a identidade e mantém o cartão guardado: só
-    /// desconectar ou a sessão acabar o apaga.
-    pub async fn mirror_put(&self, me: &Me) -> Result<(), String> {
+    /// Grava o espelho e devolve o que ficou gravado. É o único lugar que
+    /// decide o cartão: um `/me` sem cartão (servidor antigo, ou `card:
+    /// null`) mantém o cartão guardado, mas só se o espelho guardado é da
+    /// mesma conta (`id`); o de outra conta nunca aparece ao lado do nome
+    /// desta. Só desconectar ou a sessão acabar apaga o cartão.
+    pub async fn mirror_put(&self, me: &Me) -> Result<Mirror, String> {
         let card = match &me.card {
             Some(card) => Some(card.clone()),
-            None => self.mirror_get().await.ok().flatten().and_then(|m| m.card),
+            None => self
+                .mirror_get()
+                .await
+                .ok()
+                .flatten()
+                .filter(|m| m.id == me.id)
+                .and_then(|m| m.card),
         };
         let mirror = Mirror {
             id: me.id.clone(),
@@ -414,7 +422,8 @@ impl Store {
         self.repo
             .state_set(MIRROR_KEY, &json)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        Ok(mirror)
     }
 
     pub async fn mirror_clear(&self) -> Result<(), String> {
@@ -789,5 +798,30 @@ mod tests {
         assert!(at > 1_700_000_000, "{at}");
         store.unmark_session().await.unwrap();
         assert_eq!(store.connected_at().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_card_is_never_kept_under_another_account() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        let a = Me {
+            id: "A".into(),
+            username: "a".into(),
+            avatar_url: None,
+            hero_url: None,
+            bio: None,
+            profile_url: "https://www.alvanista.com/users/a".into(),
+            card: Some(serde_json::json!({"ledger": {"hours": 99}})),
+        };
+        store.mirror_put(&a).await.unwrap();
+        let b = Me {
+            id: "B".into(),
+            username: "b".into(),
+            card: None,
+            ..a
+        };
+        let merged = store.mirror_put(&b).await.unwrap();
+        assert_eq!(merged.card, None);
+        let m = store.mirror_get().await.unwrap().unwrap();
+        assert_eq!((m.id.as_str(), m.card), ("B", None));
     }
 }

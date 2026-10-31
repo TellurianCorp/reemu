@@ -309,8 +309,8 @@ impl Alvanista {
         match self.client.me(&mut tokens).await {
             Ok(me) => AlvanistaStatus {
                 connected: true,
-                // Sem cartão no `/me`, fica o último guardado.
-                card: me.card.or(mirror.and_then(|m| m.card)),
+                // `client.me` já devolve o cartão que vale (regra em `mirror_put`).
+                card: me.card,
                 fetched_at: Some(store::now_secs()),
                 connected_at,
                 device_label: device_label_if(true),
@@ -1255,5 +1255,39 @@ Connection: close
         for page in ["edit", "apps"] {
             assert!(is_site_url(&site_page_url(page).unwrap()));
         }
+    }
+
+    const ME_OTHER_ACCOUNT_NO_CARD: &str =
+        r#"{"id":"alva_B","username":"b","profile_url":"https://www.alvanista.com/users/b"}"#;
+    const ME_NULL_CARD: &str = r#"{"id":"alva_1","username":"toy","profile_url":"https://www.alvanista.com/users/toy","card":null}"#;
+
+    #[tokio::test]
+    async fn status_never_shows_a_stored_card_under_another_account() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against(me_api(ME_OTHER_ACCOUNT_NO_CARD)).await;
+        alva.store().start_session(&tokens("k4")).await.unwrap();
+        let mut me = me_named("toy");
+        me.card = Some(serde_json::json!({"ledger":{"hours":5}}));
+        alva.store().mirror_put(&me).await.unwrap();
+        let st = alva.status().await;
+        assert_eq!(st.username.as_deref(), Some("b"));
+        assert_eq!(st.card, None);
+        assert_eq!(alva.store().mirror_get().await.unwrap().unwrap().card, None);
+    }
+
+    #[tokio::test]
+    async fn status_keeps_the_stored_card_when_me_sends_card_null() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against(me_api(ME_NULL_CARD)).await;
+        alva.store().start_session(&tokens("k5")).await.unwrap();
+        let mut me = me_named("toy");
+        me.card = Some(serde_json::json!({"ledger":{"hours":5}}));
+        alva.store().mirror_put(&me).await.unwrap();
+        let st = alva.status().await;
+        assert_eq!(st.card, Some(serde_json::json!({"ledger":{"hours":5}})));
+        assert_eq!(
+            alva.store().mirror_get().await.unwrap().unwrap().card,
+            st.card
+        );
     }
 }

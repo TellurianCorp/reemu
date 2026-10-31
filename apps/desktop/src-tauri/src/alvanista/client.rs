@@ -230,9 +230,13 @@ impl Client {
             result = self.get_me(&tokens.access_token).await;
         }
         match result {
-            Ok(me) => {
-                if let Err(e) = self.store.mirror_put(&me).await {
-                    log::warn!("alvanista: não deu pra guardar o espelho do perfil: {e}");
+            Ok(mut me) => {
+                // O cartão que vale sai de `mirror_put` (a regra mora lá).
+                match self.store.mirror_put(&me).await {
+                    Ok(kept) => me.card = kept.card,
+                    Err(e) => {
+                        log::warn!("alvanista: não deu pra guardar o espelho do perfil: {e}");
+                    }
                 }
                 Ok(me)
             }
