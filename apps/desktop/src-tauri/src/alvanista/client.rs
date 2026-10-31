@@ -611,6 +611,9 @@ mod tests {
 
     #[tokio::test]
     async fn transient_failures_keep_the_tokens() {
+        // `client_for` semeia por `start_session`, que esquece as rotações do
+        // processo: na fila dos outros testes que dependem delas.
+        let _serial = SERIAL.lock().await;
         let (old, _new) = names();
         for (status, on_refresh) in [
             (503, false),
