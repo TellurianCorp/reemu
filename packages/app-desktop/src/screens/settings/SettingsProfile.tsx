@@ -56,6 +56,10 @@ const DISCONNECTED: AlvanistaStatus = {
   offline: false,
   insecure_storage: false,
   ended: false,
+  card: null,
+  fetched_at: null,
+  connected_at: null,
+  device_label: null,
 }
 
 /** Códigos que o `alvanista_connect` devolve ao falhar. */

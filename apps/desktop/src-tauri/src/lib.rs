@@ -329,6 +329,7 @@ pub fn run() {
             alvanista::alvanista_disconnect,
             alvanista::alvanista_cancel,
             alvanista::alvanista_open_profile,
+            alvanista::alvanista_open_site,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

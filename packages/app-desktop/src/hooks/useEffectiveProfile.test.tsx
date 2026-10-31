@@ -39,6 +39,10 @@ const OFF: AlvanistaStatus = {
   offline: false,
   insecure_storage: false,
   ended: false,
+  card: null,
+  fetched_at: null,
+  connected_at: null,
+  device_label: null,
 }
 const ON: AlvanistaStatus = {
   ...OFF,

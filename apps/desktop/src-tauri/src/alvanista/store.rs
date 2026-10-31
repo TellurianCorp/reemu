@@ -30,6 +30,9 @@ const DEVICE_ID_KEY: &str = "device_id";
 const MIRROR_KEY: &str = "mirror";
 /// Marcador de sessão (ver o topo do arquivo). O valor não importa.
 const SESSION_KEY: &str = "session";
+/// Quando a sessão começou (segundos Unix, em texto). Nasce com o marcador e
+/// sai com ele; sessões anteriores a esta chave não a têm.
+const CONNECTED_AT_KEY: &str = "connected_at";
 
 /// Uma renovação (ou desconexão) por vez em todo o processo, mesmo que
 /// existam vários `Client`/`Store`.
@@ -152,6 +155,10 @@ fn next_stamp() -> i64 {
     }
 }
 
+pub(super) fn now_secs() -> i64 {
+    now_millis() / 1000
+}
+
 fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -185,6 +192,9 @@ pub struct Mirror {
     #[serde(default)]
     pub bio: Option<String>,
     pub profile_url: String,
+    /// O cartão do perfil. `default`: espelhos da primeira versão não o têm.
+    #[serde(default)]
+    pub card: Option<serde_json::Value>,
     /// Segundos desde a época Unix.
     pub fetched_at: i64,
 }
@@ -249,6 +259,10 @@ impl Store {
             .state_set(SESSION_KEY, "1")
             .await
             .map_err(|e| e.to_string())?;
+        self.repo
+            .state_set(CONNECTED_AT_KEY, &now_secs().to_string())
+            .await
+            .map_err(|e| e.to_string())?;
         self.save_tokens(tokens).await
     }
 
@@ -265,9 +279,24 @@ impl Store {
     /// ficou sem par): sai o marcador.
     pub async fn unmark_session(&self) -> Result<(), String> {
         self.repo
+            .state_delete(CONNECTED_AT_KEY)
+            .await
+            .map_err(|e| e.to_string())?;
+        self.repo
             .state_delete(SESSION_KEY)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    /// Quando a sessão começou, em segundos Unix. Só lê o SQLite; `None` se
+    /// a sessão é anterior à chave (ou não há sessão).
+    pub async fn connected_at(&self) -> Result<Option<i64>, String> {
+        let raw = self
+            .repo
+            .state_get(CONNECTED_AT_KEY)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(raw.and_then(|raw| raw.parse().ok()))
     }
 
     /// Só para dentro do módulo: a renovação (que já segura `REFRESH_LOCK`) e
@@ -363,7 +392,14 @@ impl Store {
         Ok(raw.and_then(|raw| serde_json::from_str(&raw).ok()))
     }
 
+    /// Grava o espelho. Um `/me` sem cartão (servidor antigo, ou `card:
+    /// null`) atualiza a identidade e mantém o cartão guardado: só
+    /// desconectar ou a sessão acabar o apaga.
     pub async fn mirror_put(&self, me: &Me) -> Result<(), String> {
+        let card = match &me.card {
+            Some(card) => Some(card.clone()),
+            None => self.mirror_get().await.ok().flatten().and_then(|m| m.card),
+        };
         let mirror = Mirror {
             id: me.id.clone(),
             username: me.username.clone(),
@@ -371,7 +407,8 @@ impl Store {
             hero_url: me.hero_url.clone(),
             bio: me.bio.clone(),
             profile_url: me.profile_url.clone(),
-            fetched_at: now_millis() / 1000,
+            card,
+            fetched_at: now_secs(),
         };
         let json = serde_json::to_string(&mirror).map_err(|e| e.to_string())?;
         self.repo
@@ -556,6 +593,7 @@ mod tests {
             hero_url: Some("https://x/hero.png".into()),
             bio: Some("oi".into()),
             profile_url: "https://www.alvanista.com/users/toy".into(),
+            card: None,
         };
         store.mirror_put(&me).await.unwrap();
         let m = store.mirror_get().await.unwrap().unwrap();
@@ -690,5 +728,66 @@ mod tests {
         assert_eq!(a, b);
         assert_eq!(b, c);
         assert_eq!(store.device_id().await.unwrap(), a);
+    }
+
+    #[tokio::test]
+    async fn a_mirror_from_piece_1_reads_without_a_card() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        store
+            .repo
+            .state_set(
+                MIRROR_KEY,
+                r#"{"id":"alva_1","username":"toy","avatar_url":null,"hero_url":null,"bio":null,"profile_url":"https://www.alvanista.com/users/toy","fetched_at":7}"#,
+            )
+            .await
+            .unwrap();
+        let m = store.mirror_get().await.unwrap().unwrap();
+        assert_eq!((m.username.as_str(), m.fetched_at), ("toy", 7));
+        assert_eq!(m.card, None);
+        // E a sessão de então não tem data de conexão: nem 0, nem 1970.
+        assert_eq!(store.connected_at().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_null_card_keeps_the_stored_card() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        let with_card = Me {
+            id: "alva_1".into(),
+            username: "toy".into(),
+            avatar_url: None,
+            hero_url: None,
+            bio: None,
+            profile_url: "https://www.alvanista.com/users/toy".into(),
+            card: Some(serde_json::json!({"ledger": {"hours": 12}})),
+        };
+        store.mirror_put(&with_card).await.unwrap();
+        let without = Me {
+            username: "toy2".into(),
+            card: None,
+            ..with_card.clone()
+        };
+        store.mirror_put(&without).await.unwrap();
+        let m = store.mirror_get().await.unwrap().unwrap();
+        assert_eq!(m.username, "toy2");
+        assert_eq!(m.card, with_card.card);
+        // Um cartão novo substitui o velho.
+        let newer = Me {
+            card: Some(serde_json::json!({"ledger": {"hours": 13}})),
+            ..without
+        };
+        store.mirror_put(&newer).await.unwrap();
+        assert_eq!(store.mirror_get().await.unwrap().unwrap().card, newer.card);
+    }
+
+    #[tokio::test]
+    async fn connected_at_follows_the_session() {
+        let _serial = SERIAL.lock().await;
+        let (store, _) = store_with(MemSecrets::default()).await;
+        assert_eq!(store.connected_at().await.unwrap(), None);
+        store.start_session(&tokens("c1")).await.unwrap();
+        let at = store.connected_at().await.unwrap().unwrap();
+        assert!(at > 1_700_000_000, "{at}");
+        store.unmark_session().await.unwrap();
+        assert_eq!(store.connected_at().await.unwrap(), None);
     }
 }
