@@ -847,9 +847,6 @@ const es: Messages = {
     mostPlayed: 'Más jugados en ReEmu',
     moments: 'Tus momentos',
     momentsSub: 'las capturas de tus partidas guardadas',
-    slot: 'Slot {{n}}',
-    auto: 'Auto',
-    playedAtSave: '{{time}} de juego',
   },
   shaders: {
     extracting: 'Extrayendo paquete de shaders…',

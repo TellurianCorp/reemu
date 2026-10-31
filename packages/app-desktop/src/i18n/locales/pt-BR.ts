@@ -848,9 +848,6 @@ const ptBR = {
     mostPlayed: 'Mais jogados no ReEmu',
     moments: 'Seus momentos',
     momentsSub: 'as capturas dos seus saves',
-    slot: 'Slot {{n}}',
-    auto: 'Auto',
-    playedAtSave: '{{time}} de jogo',
   },
   shaders: {
     extracting: 'Extraindo pacote de shaders…',

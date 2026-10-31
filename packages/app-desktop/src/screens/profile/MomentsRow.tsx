@@ -45,10 +45,10 @@ export function MomentsRow({ states }: { states: RecentSaveState[] }) {
       <SectionHeader title={t('profilePage.moments')} subtitle={t('profilePage.momentsSub')} />
       <div className={s.row}>
         {states.map((st) => {
-          const slot = st.slot == null ? t('profilePage.auto') : t('profilePage.slot', { n: st.slot })
+          const slot = st.slot == null ? t('game.auto') : t('game.slot', { n: st.slot })
           const played =
             st.playTimeAtSave != null && st.playTimeAtSave > 0
-              ? ` · ${t('profilePage.playedAtSave', { time: formatPlayTime(st.playTimeAtSave) })}`
+              ? t('game.playedFor', { time: formatPlayTime(st.playTimeAtSave) })
               : ''
           return (
             <button key={st.id} type="button" className={s.moment} onClick={() => navigate(`/rom/${st.romId}`)}>

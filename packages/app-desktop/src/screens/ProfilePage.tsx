@@ -2,6 +2,7 @@ import { makeStyles } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { LoadingState } from '../components/EmptyState'
+import { ALVANISTA_STATUS_KEY, DISCONNECTED, useAlvanistaStatusSync } from '../hooks/useAlvanistaStatusSync'
 import { ALVANISTA_CACHED_KEY, useEffectiveProfile } from '../hooks/useEffectiveProfile'
 import {
   alvanistaCachedStatus,
@@ -13,9 +14,6 @@ import { MomentsRow } from './profile/MomentsRow'
 import { ProfileHero } from './profile/ProfileHero'
 import { mostPlayed, recentlyPlayed } from './profile/profileData'
 import { MostPlayedCard, RecentRow, ReemuNumbers } from './profile/ReemuSections'
-
-/** Mesma chave do `SettingsProfile`: as duas telas dividem o status completo. */
-const STATUS_KEY = ['alvanista-status'] as const
 
 const useStyles = makeStyles({
   page: { width: '100%', paddingBottom: '40px' },
@@ -37,16 +35,20 @@ const useStyles = makeStyles({
 export function ProfilePage() {
   const s = useStyles()
   const profile = useEffectiveProfile()
-  const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false })
+  // staleTime 0: leituras baratas do SQLite, relidas a cada vez que a página abre
+  // (jogar e salvar não invalidam estas chaves).
+  const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false, staleTime: 0 })
   const saves = useQuery({
     queryKey: ['recent-save-states', 8],
     queryFn: () => listRecentSaveStates(8),
     retry: false,
+    staleTime: 0,
   })
   // Primeiro o guardado (instantâneo), depois o completo, como no SettingsProfile.
   const cached = useQuery({ queryKey: ALVANISTA_CACHED_KEY, queryFn: alvanistaCachedStatus, retry: false })
-  const full = useQuery({ queryKey: STATUS_KEY, queryFn: alvanistaStatus, retry: false })
+  const full = useQuery({ queryKey: ALVANISTA_STATUS_KEY, queryFn: alvanistaStatus, retry: false })
   const status = full.data ?? cached.data
+  useAlvanistaStatusSync(status ?? DISCONNECTED, full.data, cached.data)
 
   const all = useMemo(() => roms.data ?? [], [roms.data])
   const recent = useMemo(() => recentlyPlayed(all, 30), [all])

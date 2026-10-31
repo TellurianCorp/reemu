@@ -18,6 +18,11 @@ import { LoadingState } from '../../components/EmptyState'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import { ProfileForm } from '../../components/ProfileForm'
 import { ALVANISTA_CACHED_KEY } from '../../hooks/useEffectiveProfile'
+import {
+  ALVANISTA_STATUS_KEY,
+  DISCONNECTED,
+  useAlvanistaStatusSync,
+} from '../../hooks/useAlvanistaStatusSync'
 import { sysToast } from '../../lib/toast'
 import {
   alvanistaCachedStatus,
@@ -27,7 +32,6 @@ import {
   alvanistaOpenProfile,
   alvanistaStatus,
   getProfile,
-  type AlvanistaStatus,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 
@@ -44,23 +48,7 @@ const useStyles = makeStyles({
   actions: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
 })
 
-const KEY = ['alvanista-status'] as const
-
-const DISCONNECTED: AlvanistaStatus = {
-  connected: false,
-  username: null,
-  avatar_url: null,
-  hero_url: null,
-  bio: null,
-  profile_url: null,
-  offline: false,
-  insecure_storage: false,
-  ended: false,
-  card: null,
-  fetched_at: null,
-  connected_at: null,
-  device_label: null,
-}
+const KEY = ALVANISTA_STATUS_KEY
 
 /** Códigos que o `alvanista_connect` devolve ao falhar. */
 const OUTCOMES = ['denied', 'timeout', 'offline', 'failed'] as const
@@ -101,32 +89,10 @@ export function SettingsProfile() {
   const attempt = useRef(0)
   // Síncrono: um segundo clique antes do re-render não abre outra tentativa.
   const connectingRef = useRef(false)
-  const endedShown = useRef(false)
 
   const status = alva.data ?? cached.data ?? DISCONNECTED
 
-  // O status completo (ou conectar, ou desconectar, que o substituem) mostra
-  // outra identidade que a guardada: o rail, o card do hub e a saudação
-  // (`useEffectiveProfile`) releem o estado guardado.
-  useEffect(() => {
-    const full = alva.data
-    const kept = cached.data
-    if (!full || !kept) return
-    if (
-      full.connected !== kept.connected ||
-      full.username !== kept.username ||
-      full.avatar_url !== kept.avatar_url
-    ) {
-      void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
-    }
-  }, [alva.data, cached.data, qc])
-
-  useEffect(() => {
-    if (!status.ended || endedShown.current) return
-    endedShown.current = true
-    push(sysToast(t('alvanista.ended'), 'Warning'))
-    qc.setQueryData(KEY, DISCONNECTED)
-  }, [status.ended, push, qc, t])
+  useAlvanistaStatusSync(status, alva.data, cached.data)
 
   // Sair da tela com uma conexão em andamento a cancela: nenhuma tentativa
   // termina sem ninguém olhando.
