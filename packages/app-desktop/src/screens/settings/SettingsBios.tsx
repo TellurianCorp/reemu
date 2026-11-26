@@ -25,6 +25,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
+  dolphinAssetsInstalled,
+  downloadDolphinAssets,
   downloadPpssppAssets,
   importBiosFile,
   listBiosStatus,
@@ -160,6 +162,15 @@ export function SettingsBios() {
     },
     onError: (e) => push(errorToast(e, 'downloadFiles')),
   })
+  const dolphin = useQuery({ queryKey: ['dolphin-assets'], queryFn: dolphinAssetsInstalled, retry: false })
+  const getDolphin = useMutation({
+    mutationFn: downloadDolphinAssets,
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['dolphin-assets'] })
+      push(sysToast(t('bios.dolphinInstalled', { count: n }), 'Success'))
+    },
+    onError: (e) => push(errorToast(e, 'downloadFiles')),
+  })
 
   // O picker abre dentro do `mutationFn` — `isPending`/`variables` cobrem o
   // diálogo nativo + a cópia, então o botão fica "ocupado" o tempo todo.
@@ -210,7 +221,10 @@ export function SettingsBios() {
   const visible = [...bySystem.entries()].filter(([systemId, files]) =>
     shows(
       systemId,
-      files.flatMap((f) => [shownName(f), biosNote(t, f.anyOfFolder ?? f.filename, f.note)]),
+      [
+        ...(systemId === 'gamecube' ? ['dolphin-emu/Sys', t('bios.dolphinNote')] : []),
+        ...files.flatMap((f) => [shownName(f), biosNote(t, f.anyOfFolder ?? f.filename, f.note)]),
+      ],
     ),
   )
   const showPsp = shows('psp', ['PPSSPP', t('bios.ppssppNote')])
@@ -277,6 +291,39 @@ export function SettingsBios() {
               <Text as="strong" weight="semibold">{platformLabel(systemId).toUpperCase()}</Text>
             </Body1>
             <div className={styles.list}>
+              {systemId === 'gamecube' && (
+                <div className={styles.row}>
+                  <span className={styles.lead}>
+                    <span className={styles.tile} aria-hidden>
+                      <PuzzlePieceRegular />
+                    </span>
+                    <span className={styles.meta}>
+                      <Body1>
+                        <code>dolphin-emu/Sys/</code>
+                      </Body1>
+                      <Caption1 className={styles.note}>{t('bios.dolphinNote')}</Caption1>
+                    </span>
+                  </span>
+                  <span className={styles.status}>
+                    {dolphin.data ? (
+                      <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                        {t('bios.installed')}
+                      </Badge>
+                    ) : (
+                      <Badge appearance="tint" color="danger">
+                        {t('bios.missing')}
+                      </Badge>
+                    )}
+                  </span>
+                  <ListIconAction
+                    primary={!dolphin.data}
+                    label={getDolphin.isPending ? t('bios.downloading') : dolphin.data ? t('bios.update') : t('bios.download')}
+                    icon={getDolphin.isPending ? <Spinner size="tiny" /> : dolphin.data ? <ArrowSyncRegular /> : <CloudArrowDownRegular />}
+                    disabled={getDolphin.isPending}
+                    onClick={() => getDolphin.mutate()}
+                  />
+                </div>
+              )}
               {files.map((f) => {
                 const key: Key = { systemId, filename: f.filename }
                 const busy =
