@@ -29,6 +29,7 @@ mod input;
 mod loader;
 pub mod pacing;
 mod raw;
+pub mod rewind;
 mod sys;
 mod vfs;
 mod vk_context;
@@ -38,6 +39,7 @@ mod vk_present;
 mod vk_sys;
 
 pub use crate::core::DesktopCore;
+pub use crate::rewind::{RewindBuffer, RewindController, RewindStepOutcome};
 pub use crate::coreopts::{
     core_option_values, core_options, set_core_option, set_pending_core_option_values,
     take_core_set_options,
