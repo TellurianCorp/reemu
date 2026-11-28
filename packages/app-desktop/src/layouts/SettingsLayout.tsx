@@ -170,10 +170,18 @@ export function SettingsLayout() {
   ];
   if (section) {
     const label = t(`settings.tabs.${section.id}`);
-    if (section.key === "video" && (sub === "shaders" || sub === "molduras")) {
+    if (
+      section.key === "video" &&
+      (sub === "proporcao" || sub === "shaders" || sub === "molduras")
+    ) {
       crumbs.push({ label, to: "/settings/video" });
       crumbs.push({
-        label: sub === "shaders" ? t("video.tabShaders") : t("video.tabBezels"),
+        label:
+          sub === "proporcao"
+            ? t("video.tabAspect")
+            : sub === "shaders"
+              ? t("video.tabShaders")
+              : t("video.tabBezels"),
       });
     } else if (section.key === "aparencia" && sub === "protecao-de-tela") {
       crumbs.push({ label, to: "/settings/aparencia" }, { label: t("appearance.screensaver.title") });

@@ -66,6 +66,7 @@ export const router = createHashRouter([
                   { path: 'biblioteca', lazy: page(() => import('./screens/settings/SettingsLibrary'), (m) => m.SettingsLibrary) },
                   { path: 'audio', lazy: page(() => import('./screens/settings/SettingsAudio'), (m) => m.SettingsAudio) },
                   { path: 'video', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo) },
+                  { path: 'video/proporcao', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo, { section: 'proporcao' as const }) },
                   { path: 'video/shaders', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo, { section: 'shaders' as const }) },
                   { path: 'video/molduras', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo, { section: 'molduras' as const }) },
                   { path: 'metadata', lazy: page(() => import('./screens/settings/SettingsMetadata'), (m) => m.SettingsMetadata) },
